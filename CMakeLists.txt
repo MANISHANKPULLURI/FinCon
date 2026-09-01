@@ -28,6 +28,7 @@ add_executable(fincon
     src/infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.cpp
     src/infrastructure/reconciliation/ReconciliationFindingCorrelator.cpp
     src/infrastructure/reconciliation/rules/SettlementAccountingRule.cpp
+    src/domain/incident/IncidentBuilder.cpp
 )
 
 target_include_directories(fincon

@@ -1,16 +1,19 @@
+#include "domain/incident/FindingCorrelation.h"
+#include "domain/incident/IncidentBuilder.h"
+
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
-#include "infrastructure/reconciliation/rules/SettlementCalculationRule.h"
-#include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
-#include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
-#include "infrastructure/reconciliation/rules/SettlementBankRule.h"
-#include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
-#include "infrastructure/reconciliation/rules/MissingRecordRule.h"
 #include "infrastructure/reconciliation/rules/DuplicateRecordRule.h"
+#include "infrastructure/reconciliation/rules/MissingRecordRule.h"
 #include "infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.h"
 #include "infrastructure/reconciliation/rules/SettlementAccountingRule.h"
+#include "infrastructure/reconciliation/rules/SettlementBankRule.h"
+#include "infrastructure/reconciliation/rules/SettlementCalculationRule.h"
+#include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
+#include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
+#include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
 
 #include <cstdint>
 #include <iostream>
@@ -41,95 +44,91 @@ int main()
     fincon::ReconciliationEngine reconciliationEngine;
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementCalculationRule
-        >()
+        std::make_unique<fincon::SettlementCalculationRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementRefundRule
-        >()
+        std::make_unique<fincon::SettlementRefundRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementFeeRule
-        >()
+        std::make_unique<fincon::SettlementFeeRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementBankRule
-        >()
+        std::make_unique<fincon::SettlementBankRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementTimingRule
-        >()
+        std::make_unique<fincon::SettlementTimingRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::MissingRecordRule
-        >()
+        std::make_unique<fincon::MissingRecordRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::DuplicateRecordRule
-        >()
+        std::make_unique<fincon::DuplicateRecordRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::PaymentSettlementMatchingRule
-        >()
+        std::make_unique<fincon::PaymentSettlementMatchingRule>()
     );
 
     reconciliationEngine.addRule(
-        std::make_unique<
-            fincon::SettlementAccountingRule
-        >()
+        std::make_unique<fincon::SettlementAccountingRule>()
     );
 
-    const std::vector<fincon::ReconciliationFinding> rawFindings =
+    const std::vector<fincon::ReconciliationFinding> findings =
         reconciliationEngine.reconcile(dataset);
 
     fincon::ReconciliationFindingCorrelator correlator;
 
-    const std::vector<fincon::ReconciliationFinding> findings =
-        correlator.correlate(rawFindings);
+    const std::vector<fincon::FindingCorrelation> correlations =
+        correlator.correlate(findings);
+
+    fincon::IncidentBuilder incidentBuilder;
+
+    const std::vector<fincon::Incident> incidents =
+        incidentBuilder.build(correlations);
 
     std::cout << "FinCon started\n\n";
 
     std::cout << "Merchants: "
-              << dataset.merchants.size() << '\n';
+              << dataset.merchants.size()
+              << '\n';
 
     std::cout << "Orders: "
-              << dataset.orders.size() << '\n';
+              << dataset.orders.size()
+              << '\n';
 
     std::cout << "Payments: "
-              << dataset.payments.size() << '\n';
+              << dataset.payments.size()
+              << '\n';
 
     std::cout << "Refunds: "
-              << dataset.refunds.size() << '\n';
+              << dataset.refunds.size()
+              << '\n';
 
     std::cout << "Fees: "
-              << dataset.fees.size() << '\n';
+              << dataset.fees.size()
+              << '\n';
 
     std::cout << "Settlements: "
-              << dataset.settlements.size() << '\n';
+              << dataset.settlements.size()
+              << '\n';
 
     std::cout << "Bank transactions: "
-              << dataset.bankTransactions.size() << '\n';
+              << dataset.bankTransactions.size()
+              << '\n';
 
     std::cout << "Accounting entries: "
-              << dataset.accountingEntries.size() << '\n';
+              << dataset.accountingEntries.size()
+              << '\n';
 
     std::cout << "\nInjected exceptions: "
-              << exceptions.size() << '\n';
+              << exceptions.size()
+              << '\n';
 
     for (const auto& exception : exceptions)
     {
@@ -159,30 +158,25 @@ int main()
               << findings.size()
               << '\n';
 
-    for (std::size_t index = 0;
-         index < findings.size();
-         ++index)
+    for (const auto& finding : findings)
     {
-        const auto& finding = findings[index];
-
-        std::cout << "RF-"
-                  << index + 1
+        std::cout << finding.id
                   << " | "
                   << finding.ruleId
                   << " | "
                   << finding.description
                   << " | entities=";
 
-        for (std::size_t entityIndex = 0;
-             entityIndex < finding.entityIds.size();
-             ++entityIndex)
+        for (std::size_t index = 0;
+             index < finding.entityIds.size();
+             ++index)
         {
-            if (entityIndex > 0)
+            if (index > 0)
             {
                 std::cout << ", ";
             }
 
-            std::cout << finding.entityIds[entityIndex];
+            std::cout << finding.entityIds[index];
         }
 
         std::cout << " | expected="
@@ -192,6 +186,90 @@ int main()
                   << " | impact="
                   << finding.financialImpact
                   << '\n';
+    }
+
+    std::cout << "\nFinding correlations: "
+              << correlations.size()
+              << '\n';
+
+    for (const auto& correlation : correlations)
+    {
+        std::cout << correlation.id
+                  << " | findings=";
+
+        for (std::size_t index = 0;
+             index < correlation.findingIds.size();
+             ++index)
+        {
+            if (index > 0)
+            {
+                std::cout << ", ";
+            }
+
+            std::cout << correlation.findingIds[index];
+        }
+
+        std::cout << " | entities=";
+
+        for (std::size_t index = 0;
+             index < correlation.entityIds.size();
+             ++index)
+        {
+            if (index > 0)
+            {
+                std::cout << ", ";
+            }
+
+            std::cout << correlation.entityIds[index];
+        }
+
+        std::cout << " | exposure="
+                  << correlation.financialExposure
+                  << '\n';
+    }
+
+    std::cout << "\nIncidents: "
+              << incidents.size()
+              << '\n';
+
+    for (const auto& incident : incidents)
+    {
+        std::cout << incident.id()
+                  << " | type="
+                  << static_cast<int>(incident.type())
+                  << " | status="
+                  << static_cast<int>(incident.status())
+                  << " | impact="
+                  << incident.financialImpact()
+                  << " | findings=";
+
+        for (std::size_t index = 0;
+             index < incident.findingIds().size();
+             ++index)
+        {
+            if (index > 0)
+            {
+                std::cout << ", ";
+            }
+
+            std::cout << incident.findingIds()[index];
+        }
+
+        std::cout << " | entities=";
+
+        for (std::size_t index = 0;
+             index < incident.entityIds().size();
+             ++index)
+        {
+            if (index > 0)
+            {
+                std::cout << ", ";
+            }
+
+            std::cout << incident.entityIds()[index];
+        }
+
+        std::cout << '\n';
     }
 
     return 0;

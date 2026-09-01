@@ -1,7 +1,7 @@
 #pragma once
 #include "common/Money.h"
 #include "common/Timestamp.h"
-#include <string.h>
+#include <string>
 
 
 namespace fincon{
