@@ -5,6 +5,7 @@
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 #include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
 #include "infrastructure/reconciliation/rules/SettlementBankRule.h"
+#include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
 
 #include <cstdint>
 #include <iostream>
@@ -55,6 +56,12 @@ int main()
     reconciliationEngine.addRule(
         std::make_unique<
             fincon::SettlementBankRule
+        >()
+    );
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::SettlementTimingRule
         >()
     );
 
