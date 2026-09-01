@@ -13,6 +13,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(fincon
     src/main.cpp
+    src/infrastructure/generator/FinancialDataGenerator.cpp
+    src/infrastructure/exception/ExceptionScenario.cpp
+    src/infrastructure/exception/ExceptionInjector.cpp
 )
 
 target_include_directories(fincon
