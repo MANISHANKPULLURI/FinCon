@@ -3,6 +3,7 @@
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/rules/SettlementCalculationRule.h"
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
+#include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
 
 #include <cstdint>
 #include <iostream>
@@ -41,6 +42,12 @@ int main()
     reconciliationEngine.addRule(
         std::make_unique<
             fincon::SettlementRefundRule
+        >()
+    );
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::SettlementFeeRule
         >()
     );
 

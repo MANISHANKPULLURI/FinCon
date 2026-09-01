@@ -20,6 +20,7 @@ add_executable(fincon
     src/infrastructure/reconciliation/rules/SettlementCalculationRule.cpp
     src/infrastructure/reconciliation/rules/RefundReconciliationRule.cpp
     src/infrastructure/reconciliation/rules/SettlementRefundRule.cpp
+    src/infrastructure/reconciliation/rules/SettlementFeeRule.cpp
 )
 
 target_include_directories(fincon
