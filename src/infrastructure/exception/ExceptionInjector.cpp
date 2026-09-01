@@ -17,18 +17,25 @@ namespace fincon
             {
             case ExceptionType::DelayedSettlement:
                 return "Delayed settlement";
+
             case ExceptionType::Duplicate:
                 return "Duplicate";
+
             case ExceptionType::PartialMatch:
                 return "Partial match";
+
             case ExceptionType::RefundMismatch:
                 return "Refund mismatch";
+
             case ExceptionType::DateShift:
                 return "Date shift";
+
             case ExceptionType::FeeDiscrepancy:
                 return "Fee discrepancy";
+
             case ExceptionType::MissingRecord:
                 return "Missing record";
+
             case ExceptionType::Unresolvable:
                 return "Unresolvable";
             }
@@ -40,7 +47,6 @@ namespace fincon
             std::int64_t first,
             std::int64_t second)
         {
-
             return first >= second
                        ? first - second
                        : second - first;
@@ -50,7 +56,6 @@ namespace fincon
             FinancialDataset &dataset,
             const std::string &paymentId)
         {
-
             for (Payment &payment : dataset.payments)
             {
                 if (payment.id == paymentId)
@@ -66,7 +71,6 @@ namespace fincon
             FinancialDataset &dataset,
             const std::string &paymentId)
         {
-
             for (Refund &refund : dataset.refunds)
             {
                 if (refund.paymentId == paymentId)
@@ -82,7 +86,6 @@ namespace fincon
             FinancialDataset &dataset,
             const std::string &paymentId)
         {
-
             for (Fee &fee : dataset.fees)
             {
                 if (fee.paymentId == paymentId)
@@ -98,15 +101,12 @@ namespace fincon
             FinancialDataset &dataset,
             const Settlement &settlement)
         {
-
             for (BankTransaction &transaction :
                  dataset.bankTransactions)
             {
-
                 if (transaction.settlementId ==
                     settlement.id)
                 {
-
                     return &transaction;
                 }
             }
@@ -118,11 +118,9 @@ namespace fincon
             FinancialDataset &dataset,
             const Settlement &settlement)
         {
-
             for (AccountingEntry &entry :
                  dataset.accountingEntries)
             {
-
                 if (entry.reference == settlement.id)
                 {
                     return &entry;
@@ -137,7 +135,6 @@ namespace fincon
             EntityType entity,
             const std::string &entityId)
         {
-
             exception.entities.push_back(entity);
             exception.entityIds.push_back(entityId);
         }
@@ -145,7 +142,6 @@ namespace fincon
         ExceptionType nextCoverageType(
             std::size_t exceptionCount)
         {
-
             return static_cast<ExceptionType>(
                 exceptionCount %
                 static_cast<std::size_t>(8));
@@ -157,19 +153,19 @@ namespace fincon
         std::uint64_t seed,
         ExceptionInjectionMode mode)
         : seed_(seed),
-          mode_(mode) {}
+          mode_(mode)
+    {
+    }
 
     std::vector<InjectedException> ExceptionInjector::inject(
         FinancialDataset &dataset,
         std::uint32_t exceptionRatePercent) const
     {
-
         std::vector<InjectedException> exceptions;
 
         if (dataset.settlements.empty() ||
             exceptionRatePercent == 0)
         {
-
             return exceptions;
         }
 
@@ -191,12 +187,15 @@ namespace fincon
               exceptions.size() < 8);
              ++index)
         {
-
             if (mode_ == ExceptionInjectionMode::Random &&
                 !shouldInject(generator))
             {
-
                 continue;
+            }
+
+            if (index >= dataset.settlements.size())
+            {
+                break;
             }
 
             Settlement &settlement =
@@ -231,7 +230,6 @@ namespace fincon
                      dataset,
                      payment->id) == nullptr))
             {
-
                 continue;
             }
 
@@ -241,7 +239,6 @@ namespace fincon
                      dataset,
                      payment->id) == nullptr))
             {
-
                 continue;
             }
 
@@ -259,7 +256,6 @@ namespace fincon
 
             case ExceptionType::DelayedSettlement:
             {
-
                 addEntity(
                     exception,
                     EntityType::Settlement,
@@ -281,7 +277,6 @@ namespace fincon
 
             case ExceptionType::Duplicate:
             {
-
                 Settlement duplicatedSettlement =
                     settlement;
 
@@ -315,7 +310,6 @@ namespace fincon
 
             case ExceptionType::PartialMatch:
             {
-
                 const Money expected =
                     settlement.netAmount;
 
@@ -354,7 +348,6 @@ namespace fincon
 
             case ExceptionType::RefundMismatch:
             {
-
                 Refund *refund =
                     findRefundForPayment(
                         dataset,
@@ -397,9 +390,9 @@ namespace fincon
 
                 break;
             }
+
             case ExceptionType::DateShift:
             {
-
                 addEntity(
                     exception,
                     EntityType::Settlement,
@@ -436,7 +429,6 @@ namespace fincon
 
             case ExceptionType::FeeDiscrepancy:
             {
-
                 Fee *fee =
                     findFeeForPayment(
                         dataset,
@@ -471,7 +463,6 @@ namespace fincon
                             dataset,
                             settlement))
                 {
-
                     addEntity(
                         exception,
                         EntityType::BankTransaction,
@@ -483,7 +474,6 @@ namespace fincon
                             dataset,
                             settlement))
                 {
-
                     addEntity(
                         exception,
                         EntityType::AccountingEntry,
@@ -503,14 +493,15 @@ namespace fincon
 
                 break;
             }
-
             case ExceptionType::MissingRecord:
             {
+                const std::string settlementId =
+                    settlement.id;
 
                 addEntity(
                     exception,
                     EntityType::Settlement,
-                    settlement.id);
+                    settlementId);
 
                 exception.expectedValue =
                     "settlement exists";
@@ -518,21 +509,31 @@ namespace fincon
                 exception.observedValue =
                     "settlement missing";
 
-                exception.financialImpact =
-                    settlement.netAmount;
+                if (payment != nullptr)
+                {
+                    exception.financialImpact =
+                        payment->amount;
+                }
+                else
+                {
+                    exception.financialImpact =
+                        settlement.netAmount;
+                }
 
                 dataset.settlements.erase(
                     dataset.settlements.begin() +
                     static_cast<std::ptrdiff_t>(index));
 
-                --index;
+                if (index > 0)
+                {
+                    --index;
+                }
 
                 break;
             }
 
             case ExceptionType::Unresolvable:
             {
-
                 const Money expected =
                     settlement.netAmount;
 
@@ -552,7 +553,6 @@ namespace fincon
                             dataset,
                             settlement))
                 {
-
                     addEntity(
                         exception,
                         EntityType::BankTransaction,
