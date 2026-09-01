@@ -24,6 +24,10 @@ add_executable(fincon
     src/infrastructure/reconciliation/rules/SettlementBankRule.cpp
     src/infrastructure/reconciliation/rules/SettlementTimingRule.cpp
     src/infrastructure/reconciliation/rules/MissingRecordRule.cpp
+    src/infrastructure/reconciliation/rules/DuplicateRecordRule.cpp
+    src/infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.cpp
+    src/infrastructure/reconciliation/ReconciliationFindingCorrelator.cpp
+    src/infrastructure/reconciliation/rules/SettlementAccountingRule.cpp
 )
 
 target_include_directories(fincon

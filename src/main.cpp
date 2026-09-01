@@ -1,12 +1,16 @@
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
+#include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
 #include "infrastructure/reconciliation/rules/SettlementCalculationRule.h"
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 #include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
 #include "infrastructure/reconciliation/rules/SettlementBankRule.h"
 #include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
 #include "infrastructure/reconciliation/rules/MissingRecordRule.h"
+#include "infrastructure/reconciliation/rules/DuplicateRecordRule.h"
+#include "infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.h"
+#include "infrastructure/reconciliation/rules/SettlementAccountingRule.h"
 
 #include <cstdint>
 #include <iostream>
@@ -72,8 +76,31 @@ int main()
         >()
     );
 
-    const std::vector<fincon::ReconciliationFinding> findings =
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::DuplicateRecordRule
+        >()
+    );
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::PaymentSettlementMatchingRule
+        >()
+    );
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::SettlementAccountingRule
+        >()
+    );
+
+    const std::vector<fincon::ReconciliationFinding> rawFindings =
         reconciliationEngine.reconcile(dataset);
+
+    fincon::ReconciliationFindingCorrelator correlator;
+
+    const std::vector<fincon::ReconciliationFinding> findings =
+        correlator.correlate(rawFindings);
 
     std::cout << "FinCon started\n\n";
 
@@ -132,25 +159,30 @@ int main()
               << findings.size()
               << '\n';
 
-    for (const auto& finding : findings)
+    for (std::size_t index = 0;
+         index < findings.size();
+         ++index)
     {
-        std::cout << finding.id
+        const auto& finding = findings[index];
+
+        std::cout << "RF-"
+                  << index + 1
                   << " | "
                   << finding.ruleId
                   << " | "
                   << finding.description
                   << " | entities=";
 
-        for (std::size_t index = 0;
-             index < finding.entityIds.size();
-             ++index)
+        for (std::size_t entityIndex = 0;
+             entityIndex < finding.entityIds.size();
+             ++entityIndex)
         {
-            if (index > 0)
+            if (entityIndex > 0)
             {
                 std::cout << ", ";
             }
 
-            std::cout << finding.entityIds[index];
+            std::cout << finding.entityIds[entityIndex];
         }
 
         std::cout << " | expected="
