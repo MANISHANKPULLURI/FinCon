@@ -16,6 +16,10 @@ add_executable(fincon
     src/infrastructure/generator/FinancialDataGenerator.cpp
     src/infrastructure/exception/ExceptionScenario.cpp
     src/infrastructure/exception/ExceptionInjector.cpp
+    src/infrastructure/reconciliation/ReconciliationEngine.cpp
+    src/infrastructure/reconciliation/rules/SettlementCalculationRule.cpp
+    src/infrastructure/reconciliation/rules/RefundReconciliationRule.cpp
+    src/infrastructure/reconciliation/rules/SettlementRefundRule.cpp
 )
 
 target_include_directories(fincon

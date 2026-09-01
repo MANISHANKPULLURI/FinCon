@@ -1,11 +1,16 @@
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
+#include "infrastructure/reconciliation/ReconciliationEngine.h"
+#include "infrastructure/reconciliation/rules/SettlementCalculationRule.h"
+#include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <vector>
 
-int main() {
+int main()
+{
     constexpr std::uint64_t seed = 42;
     constexpr std::uint32_t exceptionRatePercent = 30;
 
@@ -24,6 +29,23 @@ int main() {
             dataset,
             exceptionRatePercent
         );
+
+    fincon::ReconciliationEngine reconciliationEngine;
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::SettlementCalculationRule
+        >()
+    );
+
+    reconciliationEngine.addRule(
+        std::make_unique<
+            fincon::SettlementRefundRule
+        >()
+    );
+
+    const std::vector<fincon::ReconciliationFinding> findings =
+        reconciliationEngine.reconcile(dataset);
 
     std::cout << "FinCon started\n\n";
 
@@ -54,7 +76,8 @@ int main() {
     std::cout << "\nInjected exceptions: "
               << exceptions.size() << '\n';
 
-    for (const auto& exception : exceptions) {
+    for (const auto& exception : exceptions)
+    {
         std::cout << exception.id
                   << " | "
                   << exception.reason
@@ -62,9 +85,10 @@ int main() {
 
         for (std::size_t index = 0;
              index < exception.entityIds.size();
-             ++index) {
-
-            if (index > 0) {
+             ++index)
+        {
+            if (index > 0)
+            {
                 std::cout << ", ";
             }
 
@@ -73,6 +97,40 @@ int main() {
 
         std::cout << " | impact="
                   << exception.financialImpact
+                  << '\n';
+    }
+
+    std::cout << "\nReconciliation findings: "
+              << findings.size()
+              << '\n';
+
+    for (const auto& finding : findings)
+    {
+        std::cout << finding.id
+                  << " | "
+                  << finding.ruleId
+                  << " | "
+                  << finding.description
+                  << " | entities=";
+
+        for (std::size_t index = 0;
+             index < finding.entityIds.size();
+             ++index)
+        {
+            if (index > 0)
+            {
+                std::cout << ", ";
+            }
+
+            std::cout << finding.entityIds[index];
+        }
+
+        std::cout << " | expected="
+                  << finding.expectedValue
+                  << " | observed="
+                  << finding.observedValue
+                  << " | impact="
+                  << finding.financialImpact
                   << '\n';
     }
 
