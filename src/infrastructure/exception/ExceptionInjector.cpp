@@ -3,141 +3,311 @@
 #include <chrono>
 #include <random>
 #include <string>
+#include <vector>
 
-namespace fincon {
+namespace fincon
+{
 
-namespace {
+    namespace
+    {
 
-std::string exceptionTypeName(ExceptionType type) {
-    switch (type) {
-        case ExceptionType::DelayedSettlement:
-            return "Delayed settlement";
+        std::string exceptionTypeName(ExceptionType type)
+        {
+            switch (type)
+            {
+            case ExceptionType::DelayedSettlement:
+                return "Delayed settlement";
+            case ExceptionType::Duplicate:
+                return "Duplicate";
+            case ExceptionType::PartialMatch:
+                return "Partial match";
+            case ExceptionType::RefundMismatch:
+                return "Refund mismatch";
+            case ExceptionType::DateShift:
+                return "Date shift";
+            case ExceptionType::FeeDiscrepancy:
+                return "Fee discrepancy";
+            case ExceptionType::MissingRecord:
+                return "Missing record";
+            case ExceptionType::Unresolvable:
+                return "Unresolvable";
+            }
 
-        case ExceptionType::Duplicate:
-            return "Duplicate";
-
-        case ExceptionType::PartialMatch:
-            return "Partial match";
-
-        case ExceptionType::RefundMismatch:
-            return "Refund mismatch";
-
-        case ExceptionType::DateShift:
-            return "Date shift";
-
-        case ExceptionType::FeeDiscrepancy:
-            return "Fee discrepancy";
-
-        case ExceptionType::MissingRecord:
-            return "Missing record";
-
-        case ExceptionType::Unresolvable:
-            return "Unresolvable";
-    }
-
-    return "Unknown";
-}
-
-std::int64_t absoluteDifference(
-    std::int64_t first,
-    std::int64_t second) {
-
-    return first >= second
-        ? first - second
-        : second - first;
-}
-
-} // namespace
-
-ExceptionInjector::ExceptionInjector(std::uint64_t seed)
-    : seed_(seed) {}
-
-std::vector<InjectedException> ExceptionInjector::inject(
-    FinancialDataset& dataset,
-    std::uint32_t exceptionRatePercent) const {
-
-    std::vector<InjectedException> exceptions;
-
-    if (dataset.settlements.empty() ||
-        exceptionRatePercent == 0) {
-        return exceptions;
-    }
-
-    std::mt19937_64 generator(seed_);
-
-    std::bernoulli_distribution shouldInject(
-        static_cast<double>(exceptionRatePercent) / 100.0
-    );
-
-    std::uniform_int_distribution<int> typeDistribution(0, 7);
-
-    std::size_t exceptionCounter = 1;
-
-    const std::size_t originalSettlementCount =
-        dataset.settlements.size();
-
-    for (std::size_t index = 0;
-         index < originalSettlementCount;
-         ++index) {
-
-        if (!shouldInject(generator)) {
-            continue;
+            return "Unknown";
         }
 
-        Settlement& settlement =
-            dataset.settlements[index];
+        std::int64_t absoluteDifference(
+            std::int64_t first,
+            std::int64_t second)
+        {
 
-        const ExceptionType type =
-            static_cast<ExceptionType>(
-                typeDistribution(generator)
-            );
+            return first >= second
+                       ? first - second
+                       : second - first;
+        }
 
-        InjectedException exception;
+        Payment *findPayment(
+            FinancialDataset &dataset,
+            const std::string &paymentId)
+        {
 
-        exception.id =
-            "EX-" + std::to_string(exceptionCounter++);
+            for (Payment &payment : dataset.payments)
+            {
+                if (payment.id == paymentId)
+                {
+                    return &payment;
+                }
+            }
 
-        exception.type = type;
-        exception.entity = EntityType::Settlement;
-        exception.entityIds.push_back(settlement.id);
-        exception.reason = exceptionTypeName(type);
+            return nullptr;
+        }
 
-        switch (type) {
+        Refund *findRefundForPayment(
+            FinancialDataset &dataset,
+            const std::string &paymentId)
+        {
 
-            case ExceptionType::DelayedSettlement: {
+            for (Refund &refund : dataset.refunds)
+            {
+                if (refund.paymentId == paymentId)
+                {
+                    return &refund;
+                }
+            }
+
+            return nullptr;
+        }
+
+        Fee *findFeeForPayment(
+            FinancialDataset &dataset,
+            const std::string &paymentId)
+        {
+
+            for (Fee &fee : dataset.fees)
+            {
+                if (fee.paymentId == paymentId)
+                {
+                    return &fee;
+                }
+            }
+
+            return nullptr;
+        }
+
+        BankTransaction *findBankTransaction(
+            FinancialDataset &dataset,
+            const Settlement &settlement)
+        {
+
+            for (BankTransaction &transaction :
+                 dataset.bankTransactions)
+            {
+
+                if (transaction.merchantId ==
+                        settlement.merchantId &&
+                    transaction.amount ==
+                        settlement.netAmount)
+                {
+
+                    return &transaction;
+                }
+            }
+
+            return nullptr;
+        }
+
+        AccountingEntry *findAccountingEntry(
+            FinancialDataset &dataset,
+            const Settlement &settlement)
+        {
+
+            for (AccountingEntry &entry :
+                 dataset.accountingEntries)
+            {
+
+                if (entry.reference == settlement.id)
+                {
+                    return &entry;
+                }
+            }
+
+            return nullptr;
+        }
+
+        void addEntity(
+            InjectedException &exception,
+            EntityType entity,
+            const std::string &entityId)
+        {
+
+            exception.entities.push_back(entity);
+            exception.entityIds.push_back(entityId);
+        }
+
+        ExceptionType nextCoverageType(
+            std::size_t exceptionCount)
+        {
+
+            return static_cast<ExceptionType>(
+                exceptionCount %
+                static_cast<std::size_t>(8));
+        }
+
+    }
+
+    ExceptionInjector::ExceptionInjector(
+        std::uint64_t seed,
+        ExceptionInjectionMode mode)
+        : seed_(seed),
+          mode_(mode) {}
+
+    std::vector<InjectedException> ExceptionInjector::inject(
+        FinancialDataset &dataset,
+        std::uint32_t exceptionRatePercent) const
+    {
+
+        std::vector<InjectedException> exceptions;
+
+        if (dataset.settlements.empty() ||
+            exceptionRatePercent == 0)
+        {
+
+            return exceptions;
+        }
+
+        std::mt19937_64 generator(seed_);
+
+        std::bernoulli_distribution shouldInject(
+            static_cast<double>(exceptionRatePercent) / 100.0);
+
+        std::uniform_int_distribution<int> typeDistribution(0, 7);
+
+        std::size_t exceptionCounter = 1;
+
+        const std::size_t originalSettlementCount =
+            dataset.settlements.size();
+
+        for (std::size_t index = 0;
+             index < originalSettlementCount &&
+             (mode_ == ExceptionInjectionMode::Random ||
+              exceptions.size() < 8);
+             ++index)
+        {
+
+            if (mode_ == ExceptionInjectionMode::Random &&
+                !shouldInject(generator))
+            {
+
+                continue;
+            }
+
+            Settlement &settlement =
+                dataset.settlements[index];
+
+            if (settlement.paymentIds.empty())
+            {
+                continue;
+            }
+
+            const std::string paymentId =
+                settlement.paymentIds.front();
+
+            Payment *payment =
+                findPayment(dataset, paymentId);
+
+            ExceptionType type;
+
+            if (mode_ == ExceptionInjectionMode::Coverage)
+            {
+                type = nextCoverageType(exceptions.size());
+            }
+            else
+            {
+                type = static_cast<ExceptionType>(
+                    typeDistribution(generator));
+            }
+
+            if (type == ExceptionType::RefundMismatch &&
+                (payment == nullptr ||
+                 findRefundForPayment(
+                     dataset,
+                     payment->id) == nullptr))
+            {
+
+                continue;
+            }
+
+            if (type == ExceptionType::FeeDiscrepancy &&
+                (payment == nullptr ||
+                 findFeeForPayment(
+                     dataset,
+                     payment->id) == nullptr))
+            {
+
+                continue;
+            }
+
+            InjectedException exception;
+
+            exception.id =
+                "EX-" +
+                std::to_string(exceptionCounter++);
+
+            exception.type = type;
+            exception.reason = exceptionTypeName(type);
+
+            switch (type)
+            {
+
+            case ExceptionType::DelayedSettlement:
+            {
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
                 settlement.settledAt +=
                     std::chrono::hours(48);
 
                 exception.expectedValue =
-                    "original timestamp";
+                    "original settlement timestamp";
 
                 exception.observedValue =
-                    "timestamp delayed by 48 hours";
+                    "settlement delayed by 48 hours";
 
                 exception.financialImpact = 0;
 
                 break;
             }
 
-            case ExceptionType::Duplicate: {
-                Settlement duplicate = settlement;
+            case ExceptionType::Duplicate:
+            {
 
-                duplicate.id =
+                Settlement duplicatedSettlement =
+                    settlement;
+
+                duplicatedSettlement.id =
                     settlement.id + "-DUP";
 
                 dataset.settlements.push_back(
-                    duplicate
-                );
+                    duplicatedSettlement);
 
-                exception.entityIds.push_back(
-                    duplicate.id
-                );
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    duplicatedSettlement.id);
 
                 exception.expectedValue =
-                    "1 settlement";
+                    "one settlement";
 
                 exception.observedValue =
-                    "2 settlements for the same financial event";
+                    "duplicate settlement";
 
                 exception.financialImpact =
                     settlement.netAmount;
@@ -145,14 +315,30 @@ std::vector<InjectedException> ExceptionInjector::inject(
                 break;
             }
 
-            case ExceptionType::PartialMatch: {
+            case ExceptionType::PartialMatch:
+            {
+
                 const Money expected =
                     settlement.netAmount;
 
                 const Money observed =
                     expected / 2;
 
-                settlement.netAmount = observed;
+                settlement.netAmount =
+                    observed;
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
+                if (payment != nullptr)
+                {
+                    addEntity(
+                        exception,
+                        EntityType::Payment,
+                        payment->id);
+                }
 
                 exception.expectedValue =
                     std::to_string(expected);
@@ -163,20 +349,42 @@ std::vector<InjectedException> ExceptionInjector::inject(
                 exception.financialImpact =
                     absoluteDifference(
                         expected,
-                        observed
-                    );
+                        observed);
 
                 break;
             }
 
-            case ExceptionType::RefundMismatch: {
+            case ExceptionType::RefundMismatch:
+            {
+
+                Refund *refund =
+                    findRefundForPayment(
+                        dataset,
+                        payment->id);
+
                 const Money expected =
-                    settlement.refundAmount;
+                    refund->amount;
 
                 const Money observed =
                     expected + 1000;
 
-                settlement.refundAmount = observed;
+                refund->amount =
+                    observed;
+
+                addEntity(
+                    exception,
+                    EntityType::Refund,
+                    refund->id);
+
+                addEntity(
+                    exception,
+                    EntityType::Payment,
+                    payment->id);
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
 
                 exception.expectedValue =
                     std::to_string(expected);
@@ -187,35 +395,102 @@ std::vector<InjectedException> ExceptionInjector::inject(
                 exception.financialImpact =
                     absoluteDifference(
                         expected,
-                        observed
-                    );
+                        observed);
 
                 break;
             }
+            case ExceptionType::DateShift:
+            {
 
-            case ExceptionType::DateShift: {
-                settlement.settledAt +=
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
+                BankTransaction *transaction =
+                    findBankTransaction(
+                        dataset,
+                        settlement);
+
+                if (transaction == nullptr)
+                {
+                    continue;
+                }
+
+                transaction->postedAt +=
                     std::chrono::hours(24);
 
+                addEntity(
+                    exception,
+                    EntityType::BankTransaction,
+                    transaction->id);
+
                 exception.expectedValue =
-                    "original settlement date";
+                    "bank posting aligned with settlement";
 
                 exception.observedValue =
-                    "settlement date shifted by 24 hours";
+                    "bank posting shifted by 24 hours";
 
                 exception.financialImpact = 0;
 
                 break;
             }
 
-            case ExceptionType::FeeDiscrepancy: {
+            case ExceptionType::FeeDiscrepancy:
+            {
+
+                Fee *fee =
+                    findFeeForPayment(
+                        dataset,
+                        payment->id);
+
                 const Money expected =
-                    settlement.feeAmount;
+                    fee->amount;
 
                 const Money observed =
                     expected + 500;
 
-                settlement.feeAmount = observed;
+                fee->amount =
+                    observed;
+
+                addEntity(
+                    exception,
+                    EntityType::Fee,
+                    fee->id);
+
+                addEntity(
+                    exception,
+                    EntityType::Payment,
+                    payment->id);
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
+                if (BankTransaction *transaction =
+                        findBankTransaction(
+                            dataset,
+                            settlement))
+                {
+
+                    addEntity(
+                        exception,
+                        EntityType::BankTransaction,
+                        transaction->id);
+                }
+
+                if (AccountingEntry *entry =
+                        findAccountingEntry(
+                            dataset,
+                            settlement))
+                {
+
+                    addEntity(
+                        exception,
+                        EntityType::AccountingEntry,
+                        entry->id);
+                }
 
                 exception.expectedValue =
                     std::to_string(expected);
@@ -226,13 +501,19 @@ std::vector<InjectedException> ExceptionInjector::inject(
                 exception.financialImpact =
                     absoluteDifference(
                         expected,
-                        observed
-                    );
+                        observed);
 
                 break;
             }
 
-            case ExceptionType::MissingRecord: {
+            case ExceptionType::MissingRecord:
+            {
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
                 exception.expectedValue =
                     "settlement exists";
 
@@ -244,35 +525,58 @@ std::vector<InjectedException> ExceptionInjector::inject(
 
                 dataset.settlements.erase(
                     dataset.settlements.begin() +
-                    static_cast<std::ptrdiff_t>(index)
-                );
+                    static_cast<std::ptrdiff_t>(index));
+
+                --index;
 
                 break;
             }
 
-            case ExceptionType::Unresolvable: {
-                settlement.netAmount += 1;
+            case ExceptionType::Unresolvable:
+            {
+
+                const Money expected =
+                    settlement.netAmount;
+
+                const Money observed =
+                    expected + 1;
+
+                settlement.netAmount =
+                    observed;
+
+                addEntity(
+                    exception,
+                    EntityType::Settlement,
+                    settlement.id);
+
+                if (BankTransaction *transaction =
+                        findBankTransaction(
+                            dataset,
+                            settlement))
+                {
+
+                    addEntity(
+                        exception,
+                        EntityType::BankTransaction,
+                        transaction->id);
+                }
 
                 exception.expectedValue =
-                    "consistent settlement amount";
+                    std::to_string(expected);
 
                 exception.observedValue =
-                    "ambiguous one-paise discrepancy";
+                    std::to_string(observed);
 
                 exception.financialImpact = 1;
 
                 break;
             }
+            }
+
+            exceptions.push_back(exception);
         }
 
-        exceptions.push_back(exception);
-
-        if (type == ExceptionType::MissingRecord) {
-            --index;
-        }
+        return exceptions;
     }
 
-    return exceptions;
 }
-
-} // namespace fincon

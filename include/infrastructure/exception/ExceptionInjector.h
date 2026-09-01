@@ -43,9 +43,18 @@ struct InjectedException {
     std::string reason;
 };
 
+enum class ExceptionInjectionMode {
+    Random,
+    Coverage
+};
+
 class ExceptionInjector {
 public:
-    explicit ExceptionInjector(std::uint64_t seed);
+    explicit ExceptionInjector(
+        std::uint64_t seed,
+        ExceptionInjectionMode mode =
+            ExceptionInjectionMode::Random
+    );
 
     std::vector<InjectedException> inject(
         FinancialDataset& dataset,
@@ -54,6 +63,7 @@ public:
 
 private:
     std::uint64_t seed_;
+    ExceptionInjectionMode mode_;
 };
 
 }

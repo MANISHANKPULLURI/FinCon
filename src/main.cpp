@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <vector>
 
 int main() {
     constexpr std::uint64_t seed = 42;
@@ -13,7 +14,10 @@ int main() {
     fincon::FinancialDataset dataset =
         generator.generate(2, 10);
 
-    fincon::ExceptionInjector injector(seed);
+    fincon::ExceptionInjector injector(
+        seed,
+        fincon::ExceptionInjectionMode::Coverage
+    );
 
     const std::vector<fincon::InjectedException> exceptions =
         injector.inject(
