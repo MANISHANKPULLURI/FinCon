@@ -154,6 +154,7 @@ FinancialDataset FinancialDataGenerator::generate(
             BankTransaction bankTransaction;
             bankTransaction.id = "B-" + suffix;
             bankTransaction.merchantId = merchant.id;
+            bankTransaction.settlementId = settlement.id;
             bankTransaction.amount = settlementAmount;
             bankTransaction.type =
                 BankTransactionType::Credit;

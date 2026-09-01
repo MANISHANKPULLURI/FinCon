@@ -103,10 +103,8 @@ namespace fincon
                  dataset.bankTransactions)
             {
 
-                if (transaction.merchantId ==
-                        settlement.merchantId &&
-                    transaction.amount ==
-                        settlement.netAmount)
+                if (transaction.settlementId ==
+                    settlement.id)
                 {
 
                     return &transaction;
