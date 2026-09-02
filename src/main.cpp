@@ -2,13 +2,28 @@
 #include "domain/incident/IncidentBuilder.h"
 
 #include "application/investigation/DefaultInvestigationService.h"
+#include "application/investigation/DeterministicEvidenceProvider.h"
 #include "application/investigation/DeterministicInvestigationPlanner.h"
+#include "application/investigation/InvestigationAgentOrchestrator.h"
 #include "application/investigation/InvestigationToolRegistry.h"
+#include "application/investigation/LLMConfiguration.h"
 
+#include "infrastructure/configuration/DotEnvLoader.h"
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
+#include "infrastructure/investigation/DeterministicDecisionPolicy.h"
+#include "infrastructure/investigation/DeterministicHypothesisEngine.h"
+#include "infrastructure/investigation/DeterministicImpactCalculator.h"
+#include "infrastructure/investigation/DeterministicInvestigationCompletenessEvaluator.h"
+#include "infrastructure/investigation/DeterministicInvestigationEscalationPolicy.h"
+#include "infrastructure/investigation/InMemoryFinancialDataRepository.h"
+#include "infrastructure/investigation/JsonInvestigationResponseParser.h"
+#include "infrastructure/investigation/LibcurlHttpClient.h"
+#include "infrastructure/investigation/MetaLlamaInvestigationAgent.h"
+#include "infrastructure/investigation/MetaLlamaLLMProvider.h"
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
+
 #include "infrastructure/reconciliation/rules/DuplicateRecordRule.h"
 #include "infrastructure/reconciliation/rules/MissingRecordRule.h"
 #include "infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.h"
@@ -19,11 +34,6 @@
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 #include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
 
-#include "application/investigation/DeterministicEvidenceProvider.h"
-#include "infrastructure/investigation/DeterministicDecisionPolicy.h"
-#include "infrastructure/investigation/DeterministicHypothesisEngine.h"
-#include "infrastructure/investigation/DeterministicImpactCalculator.h"
-#include "infrastructure/investigation/InMemoryFinancialDataRepository.h"
 #include "infrastructure/investigation/tools/CalculateDifferenceTool.h"
 #include "infrastructure/investigation/tools/GetAccountingEntriesTool.h"
 #include "infrastructure/investigation/tools/GetBankTransactionsTool.h"
@@ -41,6 +51,28 @@ int main()
 {
     constexpr std::uint64_t seed = 42;
     constexpr std::uint32_t exceptionRatePercent = 30;
+
+    fincon::DotEnvLoader env("src/.env");
+
+    fincon::LLMConfiguration llmConfiguration(
+        env.get("MUSE_API_KEY"),
+        env.get("MUSE_MODEL")
+    );
+
+    fincon::LibcurlHttpClient httpClient;
+
+    fincon::MetaLlamaLLMProvider llmProvider(
+        httpClient,
+        llmConfiguration.apiKey(),
+        llmConfiguration.model()
+    );
+
+    fincon::JsonInvestigationResponseParser responseParser;
+
+    fincon::MetaLlamaInvestigationAgent investigationAgent(
+        llmProvider,
+        responseParser
+    );
 
     fincon::FinancialDataGenerator generator(seed);
 
@@ -165,7 +197,18 @@ int main()
         std::make_unique<fincon::CalculateDifferenceTool>(repository)
     );
 
+    fincon::InvestigationAgentOrchestrator agentOrchestrator(
+        investigationAgent,
+        toolRegistry
+    );
+
     fincon::DeterministicInvestigationPlanner planner;
+
+    fincon::DeterministicInvestigationCompletenessEvaluator
+        completenessEvaluator;
+
+    fincon::DeterministicInvestigationEscalationPolicy
+        escalationPolicy;
 
     fincon::DefaultInvestigationService investigationService(
         planner,
@@ -173,7 +216,10 @@ int main()
         hypothesisEngine,
         impactCalculator,
         decisionPolicy,
-        toolRegistry
+        toolRegistry,
+        completenessEvaluator,
+        escalationPolicy,
+        agentOrchestrator
     );
 
     std::cout << "FinCon started\n\n";
@@ -226,9 +272,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << exception.entityIds[index];
         }
@@ -256,9 +300,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << finding.entityIds[index];
         }
@@ -286,9 +328,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << correlation.findingIds[index];
         }
@@ -300,9 +340,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << correlation.entityIds[index];
         }
@@ -332,9 +370,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << incident.findingIds()[index];
         }
@@ -346,9 +382,7 @@ int main()
              ++index)
         {
             if (index > 0)
-            {
                 std::cout << ", ";
-            }
 
             std::cout << incident.entityIds()[index];
         }

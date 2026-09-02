@@ -11,7 +11,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(CURL REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
 add_executable(fincon
+
     src/main.cpp
     src/infrastructure/generator/FinancialDataGenerator.cpp
     src/infrastructure/exception/ExceptionScenario.cpp
@@ -26,12 +30,14 @@ add_executable(fincon
     src/infrastructure/reconciliation/rules/MissingRecordRule.cpp
     src/infrastructure/reconciliation/rules/DuplicateRecordRule.cpp
     src/infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.cpp
-    src/infrastructure/reconciliation/ReconciliationFindingCorrelator.cpp
     src/infrastructure/reconciliation/rules/SettlementAccountingRule.cpp
+    src/infrastructure/reconciliation/ReconciliationFindingCorrelator.cpp
     src/domain/incident/IncidentBuilder.cpp
     src/infrastructure/investigation/InMemoryFinancialDataRepository.cpp
     src/application/investigation/InvestigationToolRegistry.cpp
     src/application/investigation/DeterministicEvidenceProvider.cpp
+    src/application/investigation/DeterministicInvestigationPlanner.cpp
+    src/application/investigation/DefaultInvestigationService.cpp
     src/infrastructure/investigation/tools/GetPaymentTool.cpp
     src/infrastructure/investigation/tools/GetSettlementTool.cpp
     src/infrastructure/investigation/tools/GetRefundsTool.cpp
@@ -42,8 +48,17 @@ add_executable(fincon
     src/infrastructure/investigation/DeterministicHypothesisEngine.cpp
     src/infrastructure/investigation/DeterministicImpactCalculator.cpp
     src/infrastructure/investigation/DeterministicDecisionPolicy.cpp
-    src/application/investigation/DeterministicInvestigationPlanner.cpp
-    src/application/investigation/DefaultInvestigationService.cpp
+    src/infrastructure/investigation/DeterministicInvestigationEscalationPolicy.cpp
+    src/infrastructure/investigation/DeterministicInvestigationCompletenessEvaluator.cpp
+    src/infrastructure/investigation/LibcurlHttpClient.cpp
+    src/infrastructure/configuration/DotEnvLoader.cpp
+    src/infrastructure/configuration/LLMConfiguration.cpp
+    src/infrastructure/investigation/MetaLlamaInvestigationAgent.cpp
+    src/infrastructure/investigation/MetaLlamaLLMProvider.cpp
+    src/infrastructure/investigation/JsonInvestigationResponseParser.cpp
+    src/application/investigation/InvestigationAgentOrchestrator.cpp
+
+
 )
 
 target_include_directories(fincon
@@ -51,12 +66,21 @@ target_include_directories(fincon
         ${PROJECT_SOURCE_DIR}/include
 )
 
+target_link_libraries(fincon
+    PRIVATE
+        CURL::libcurl
+        nlohmann_json::nlohmann_json
+)
+
 if(MSVC)
+
     target_compile_options(fincon PRIVATE
         /W4
         /permissive-
     )
+
 else()
+
     target_compile_options(fincon PRIVATE
         -Wall
         -Wextra
@@ -64,4 +88,5 @@ else()
         -Wconversion
         -Wsign-conversion
     )
+
 endif()
