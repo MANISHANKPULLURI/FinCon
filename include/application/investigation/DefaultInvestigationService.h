@@ -9,7 +9,9 @@
 #include "application/investigation/InvestigationPlanner.h"
 #include "application/investigation/InvestigationToolRegistry.h"
 #include "application/investigation/InvestigationAgentOrchestrator.h"
+#include "application/investigation/InvestigationAuditService.h"
 #include "application/investigation/InvestigationService.h"
+#include "application/investigation/RecommendationPolicy.h"
 
 namespace fincon
 {
@@ -25,7 +27,9 @@ namespace fincon
             const InvestigationToolRegistry& toolRegistry,
             const InvestigationCompletenessEvaluator& completenessEvaluator,
             const InvestigationEscalationPolicy& escalationPolicy,
-            const InvestigationAgentOrchestrator& agentOrchestrator
+            const InvestigationAgentOrchestrator& agentOrchestrator,
+            InvestigationAuditService& auditService,
+            const RecommendationPolicy& recommendationPolicy
         );
 
         Investigation investigate(
@@ -42,5 +46,7 @@ namespace fincon
         const InvestigationCompletenessEvaluator& completenessEvaluator_;
         const InvestigationEscalationPolicy& escalationPolicy_;
         const InvestigationAgentOrchestrator& agentOrchestrator_;
+        InvestigationAuditService& auditService_;
+        const RecommendationPolicy& recommendationPolicy_;
     };
 }

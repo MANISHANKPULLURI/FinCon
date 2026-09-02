@@ -6,6 +6,7 @@
 #include "application/investigation/DeterministicInvestigationPlanner.h"
 #include "application/investigation/InvestigationToolRegistry.h"
 #include "application/investigation/LLMConfiguration.h"
+#include "application/investigation/RecommendationPolicy.h"
 
 #include "domain/incident/IncidentBuilder.h"
 #include "domain/incident/FindingCorrelation.h"
@@ -22,7 +23,10 @@
 #include "infrastructure/investigation/DeterministicInvestigationEscalationPolicy.h"
 #include "infrastructure/investigation/DeterministicInvestigationResponseValidator.h"
 #include "infrastructure/investigation/DeterministicInvestigationToolRequestValidator.h"
+#include "infrastructure/investigation/DeterministicRecommendationPolicy.h"
 #include "infrastructure/investigation/InMemoryFinancialDataRepository.h"
+#include "infrastructure/investigation/InMemoryInvestigationAuditRepository.h"
+#include "application/investigation/InvestigationAuditService.h"
 
 #include "infrastructure/investigation/JsonInvestigationResponseParser.h"
 #include "infrastructure/investigation/LibcurlHttpClient.h"
@@ -164,6 +168,9 @@ int main()
         dataset.fees
     );
 
+    fincon::InMemoryInvestigationAuditRepository auditRepository;
+    fincon::InvestigationAuditService auditService(auditRepository);
+
     fincon::DeterministicEvidenceProvider evidenceProvider(
         repository
     );
@@ -232,6 +239,8 @@ int main()
     fincon::DeterministicInvestigationEscalationPolicy
         escalationPolicy;
 
+    fincon::DeterministicRecommendationPolicy recommendationPolicy;
+
     fincon::DefaultInvestigationService investigationService(
         planner,
         evidenceProvider,
@@ -241,7 +250,9 @@ int main()
         toolRegistry,
         completenessEvaluator,
         escalationPolicy,
-        agentOrchestrator
+        agentOrchestrator,
+        auditService,
+        recommendationPolicy
     );
 
     fincon::Phase2Evaluation evaluation;

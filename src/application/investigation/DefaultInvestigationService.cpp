@@ -1,3 +1,4 @@
+
 #include "application/investigation/DefaultInvestigationService.h"
 
 #include "application/investigation/InvestigationContext.h"
@@ -24,6 +25,14 @@ namespace fincon
         investigation.setIncidentId(incident.id());
         investigation.setStatus(InvestigationStatus::InProgress);
 
+        auditService_.record(
+            investigation.id(),
+            incident.id(),
+            AuditEventType::InvestigationStarted,
+            "investigation-service",
+            "Investigation started for incident."
+        );
+
         InvestigationContext context;
         context.incident = &incident;
 
@@ -40,7 +49,7 @@ namespace fincon
                 InvestigationToolCall failedCall = plannedCall;
                 failedCall.setStatus(ToolCallStatus::Failed);
                 failedCall.setResult(
-                    "Investigationtool not registered: " +
+                    "Investigation tool not registered: " +
                     plannedCall.toolName()
                 );
 
@@ -54,6 +63,15 @@ namespace fincon
             InvestigationToolCall executedCall =
                 tool->execute(plannedCall);
 
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::ToolExecuted,
+                "investigation-service",
+                executedCall.toolName() +
+                    " tool execution completed."
+            );
+
             context.toolCalls.push_back(
                 std::move(executedCall)
             );
@@ -64,11 +82,36 @@ namespace fincon
                 incident.entityIds()
             );
 
+        for (const InvestigationEvidence& item : context.evidence)
+        {
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::EvidenceCollected,
+                "evidence-provider",
+                "Evidence collected: " + item.id(),
+                item.financialImpact()
+            );
+        }
+
         context.hypotheses =
             hypothesisEngine_.generate(
                 incident,
                 context.evidence
             );
+
+        for (const InvestigationHypothesis& hypothesis :
+             context.hypotheses)
+        {
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::HypothesisGenerated,
+                "hypothesis-engine",
+                "Hypothesis generated: " + hypothesis.id(),
+                hypothesis.estimatedImpact()
+            );
+        }
 
         const Money confirmedImpact =
             impactCalculator_.calculate(
@@ -76,6 +119,15 @@ namespace fincon
                 context.evidence,
                 context.hypotheses
             );
+
+        auditService_.record(
+            investigation.id(),
+            incident.id(),
+            AuditEventType::ImpactCalculated,
+            "impact-calculator",
+            "Financial impact calculated.",
+            confirmedImpact
+        );
 
         InvestigationDecision decision =
             decisionPolicy_.decide(
@@ -154,6 +206,15 @@ namespace fincon
             }()
         );
 
+        auditService_.record(
+            investigation.id(),
+            incident.id(),
+            AuditEventType::DecisionMade,
+            "decision-policy",
+            decision.rationale(),
+            decision.financialImpact()
+        );
+
         const InvestigationCompleteness completeness =
             completenessEvaluator_.evaluate(
                 investigation
@@ -167,6 +228,15 @@ namespace fincon
         {
             investigation.setStatus(
                 InvestigationStatus::Completed
+            );
+
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::InvestigationCompleted,
+                "investigation-service",
+                "Investigation completed deterministically.",
+                investigation.confirmedImpact()
             );
 
             return investigation;
@@ -188,6 +258,14 @@ namespace fincon
         if (escalation == EscalationDecision::EscalateToLLM)
         {
             investigation.setLlmEscalated(true);
+
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::InvestigationStarted,
+                "llm-escalation",
+                "Investigation escalated to LLM."
+            );
 
             InvestigationRequest request(
                 "REQ-" + incident.id()
@@ -268,10 +346,28 @@ namespace fincon
                     return ConfidenceLevel::Unknown;
                 }()
             );
+
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::DecisionMade,
+                "llm-agent",
+                response.decision().rationale(),
+                response.decision().financialImpact()
+            );
         }
 
         investigation.setStatus(
             InvestigationStatus::Completed
+        );
+
+        auditService_.record(
+            investigation.id(),
+            incident.id(),
+            AuditEventType::InvestigationCompleted,
+            "investigation-service",
+            "Investigation completed.",
+            investigation.confirmedImpact()
         );
 
         return investigation;
@@ -286,7 +382,9 @@ namespace fincon
         const InvestigationToolRegistry& toolRegistry,
         const InvestigationCompletenessEvaluator& completenessEvaluator,
         const InvestigationEscalationPolicy& escalationPolicy,
-        const InvestigationAgentOrchestrator& agentOrchestrator)
+        const InvestigationAgentOrchestrator& agentOrchestrator,
+        InvestigationAuditService& auditService,
+        const RecommendationPolicy& recommendationPolicy)
         : planner_(planner),
           evidenceProvider_(evidenceProvider),
           hypothesisEngine_(hypothesisEngine),
@@ -295,7 +393,9 @@ namespace fincon
           toolRegistry_(toolRegistry),
           completenessEvaluator_(completenessEvaluator),
           escalationPolicy_(escalationPolicy),
-          agentOrchestrator_(agentOrchestrator)
+          agentOrchestrator_(agentOrchestrator),
+          auditService_(auditService),
+          recommendationPolicy_(recommendationPolicy)
     {
     }
 }
