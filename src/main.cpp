@@ -1,6 +1,10 @@
 #include "domain/incident/FindingCorrelation.h"
 #include "domain/incident/IncidentBuilder.h"
 
+#include "application/investigation/DefaultInvestigationService.h"
+#include "application/investigation/DeterministicInvestigationPlanner.h"
+#include "application/investigation/InvestigationToolRegistry.h"
+
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
@@ -14,6 +18,19 @@
 #include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 #include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
+
+#include "application/investigation/DeterministicEvidenceProvider.h"
+#include "infrastructure/investigation/DeterministicDecisionPolicy.h"
+#include "infrastructure/investigation/DeterministicHypothesisEngine.h"
+#include "infrastructure/investigation/DeterministicImpactCalculator.h"
+#include "infrastructure/investigation/InMemoryFinancialDataRepository.h"
+#include "infrastructure/investigation/tools/CalculateDifferenceTool.h"
+#include "infrastructure/investigation/tools/GetAccountingEntriesTool.h"
+#include "infrastructure/investigation/tools/GetBankTransactionsTool.h"
+#include "infrastructure/investigation/tools/GetPaymentTool.h"
+#include "infrastructure/investigation/tools/GetRefundsTool.h"
+#include "infrastructure/investigation/tools/GetRelatedTransactionsTool.h"
+#include "infrastructure/investigation/tools/GetSettlementTool.h"
 
 #include <cstdint>
 #include <iostream>
@@ -91,6 +108,73 @@ int main()
 
     const std::vector<fincon::Incident> incidents =
         incidentBuilder.build(correlations);
+
+    fincon::InMemoryFinancialDataRepository repository(
+        dataset.payments,
+        dataset.settlements,
+        dataset.refunds,
+        dataset.bankTransactions,
+        dataset.accountingEntries,
+        dataset.fees
+    );
+
+    fincon::DeterministicEvidenceProvider evidenceProvider(
+        repository
+    );
+
+    fincon::DeterministicHypothesisEngine hypothesisEngine;
+
+    fincon::DeterministicImpactCalculator impactCalculator;
+
+    fincon::DeterministicDecisionPolicy decisionPolicy;
+
+    fincon::InvestigationToolRegistry toolRegistry;
+
+    toolRegistry.registerTool(
+        "get_payment",
+        std::make_unique<fincon::GetPaymentTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "get_settlement",
+        std::make_unique<fincon::GetSettlementTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "get_refunds",
+        std::make_unique<fincon::GetRefundsTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "get_bank_transactions",
+        std::make_unique<fincon::GetBankTransactionsTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "get_accounting_entries",
+        std::make_unique<fincon::GetAccountingEntriesTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "get_related_transactions",
+        std::make_unique<fincon::GetRelatedTransactionsTool>(repository)
+    );
+
+    toolRegistry.registerTool(
+        "calculate_difference",
+        std::make_unique<fincon::CalculateDifferenceTool>(repository)
+    );
+
+    fincon::DeterministicInvestigationPlanner planner;
+
+    fincon::DefaultInvestigationService investigationService(
+        planner,
+        evidenceProvider,
+        hypothesisEngine,
+        impactCalculator,
+        decisionPolicy,
+        toolRegistry
+    );
 
     std::cout << "FinCon started\n\n";
 
@@ -270,6 +354,43 @@ int main()
         }
 
         std::cout << '\n';
+    }
+
+    std::vector<fincon::Investigation> investigations;
+
+    investigations.reserve(incidents.size());
+
+    for (const auto& incident : incidents)
+    {
+        investigations.push_back(
+            investigationService.investigate(incident)
+        );
+    }
+
+    std::cout << "\nInvestigations: "
+              << investigations.size()
+              << '\n';
+
+    for (const auto& investigation : investigations)
+    {
+        std::cout << investigation.id()
+                  << " | incident="
+                  << investigation.incidentId()
+                  << " | status="
+                  << static_cast<int>(investigation.status())
+                  << " | outcome="
+                  << static_cast<int>(investigation.outcome())
+                  << " | confidence="
+                  << static_cast<int>(investigation.confidence())
+                  << " | impact="
+                  << investigation.confirmedImpact()
+                  << " | evidence="
+                  << investigation.evidenceIds().size()
+                  << " | hypotheses="
+                  << investigation.hypothesisIds().size()
+                  << " | tools="
+                  << investigation.toolCallIds().size()
+                  << '\n';
     }
 
     return 0;

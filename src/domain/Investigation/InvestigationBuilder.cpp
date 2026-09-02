@@ -6,7 +6,6 @@
 
 namespace fincon
 {
-
     std::vector<Investigation>
     InvestigationBuilder::build(
         const std::vector<Incident>& incidents) const
@@ -50,5 +49,4 @@ namespace fincon
 
         return investigations;
     }
-
 }

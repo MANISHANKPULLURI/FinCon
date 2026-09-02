@@ -29,6 +29,21 @@ add_executable(fincon
     src/infrastructure/reconciliation/ReconciliationFindingCorrelator.cpp
     src/infrastructure/reconciliation/rules/SettlementAccountingRule.cpp
     src/domain/incident/IncidentBuilder.cpp
+    src/infrastructure/investigation/InMemoryFinancialDataRepository.cpp
+    src/application/investigation/InvestigationToolRegistry.cpp
+    src/application/investigation/DeterministicEvidenceProvider.cpp
+    src/infrastructure/investigation/tools/GetPaymentTool.cpp
+    src/infrastructure/investigation/tools/GetSettlementTool.cpp
+    src/infrastructure/investigation/tools/GetRefundsTool.cpp
+    src/infrastructure/investigation/tools/GetBankTransactionsTool.cpp
+    src/infrastructure/investigation/tools/GetAccountingEntriesTool.cpp
+    src/infrastructure/investigation/tools/GetRelatedTransactionsTool.cpp
+    src/infrastructure/investigation/tools/CalculateDifferenceTool.cpp
+    src/infrastructure/investigation/DeterministicHypothesisEngine.cpp
+    src/infrastructure/investigation/DeterministicImpactCalculator.cpp
+    src/infrastructure/investigation/DeterministicDecisionPolicy.cpp
+    src/application/investigation/DeterministicInvestigationPlanner.cpp
+    src/application/investigation/DefaultInvestigationService.cpp
 )
 
 target_include_directories(fincon

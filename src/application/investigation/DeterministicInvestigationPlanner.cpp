@@ -5,15 +5,18 @@
 
 namespace fincon
 {
-
     namespace
     {
-
         void addToolCall(
             std::vector<InvestigationToolCall>& calls,
             const std::string& toolName,
             const std::string& input)
         {
+            if (input.empty())
+            {
+                return;
+            }
+
             InvestigationToolCall call(
                 "TC-" +
                 std::to_string(calls.size() + 1)
@@ -26,6 +29,35 @@ namespace fincon
             calls.push_back(std::move(call));
         }
 
+        std::string findEntity(
+            const Incident& incident,
+            const std::string& prefix)
+        {
+            for (const std::string& entityId : incident.entityIds())
+            {
+                if (entityId.rfind(prefix, 0) == 0)
+                {
+                    return entityId;
+                }
+            }
+
+            return {};
+        }
+
+        std::string findBaseSettlement(
+            const Incident& incident)
+        {
+            for (const std::string& entityId : incident.entityIds())
+            {
+                if (entityId.rfind("S-", 0) == 0 &&
+                    entityId.find("-DUP") == std::string::npos)
+                {
+                    return entityId;
+                }
+            }
+
+            return {};
+        }
     }
 
     std::vector<InvestigationToolCall>
@@ -41,6 +73,21 @@ namespace fincon
 
         const Incident& incident = *context.incident;
 
+        const std::string paymentId =
+            findEntity(incident, "P-");
+
+        const std::string settlementId =
+            findBaseSettlement(incident);
+
+        const std::string refundId =
+            findEntity(incident, "R-");
+
+        const std::string bankTransactionId =
+            findEntity(incident, "B-");
+
+        const std::string accountingEntryId =
+            findEntity(incident, "A-");
+
         switch (incident.type())
         {
         case IncidentType::DuplicateRecord:
@@ -48,19 +95,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_payment",
-                "Inspect payment related to duplicate settlement"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect all settlements related to duplicate record"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_related_transactions",
-                "Find transactions related to duplicate settlement"
+                settlementId
             );
 
             break;
@@ -70,19 +117,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_payment",
-                "Inspect payment associated with missing settlement"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_settlement",
-                "Search for settlement associated with payment"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_related_transactions",
-                "Find related transactions for missing record"
+                paymentId
             );
 
             break;
@@ -92,19 +139,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_payment",
-                "Inspect payment associated with refund mismatch"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_refunds",
-                "Inspect refunds associated with payment"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement containing payment"
+                settlementId
             );
 
             break;
@@ -114,25 +161,25 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_payment",
-                "Inspect payment used for settlement calculation"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement and applied fees"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_related_transactions",
-                "Inspect related fee transactions"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_accounting_entries",
-                "Inspect accounting entries for settlement"
+                settlementId
             );
 
             break;
@@ -142,13 +189,13 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement processing date"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_bank_transactions",
-                "Inspect corresponding bank transaction date"
+                settlementId
             );
 
             break;
@@ -158,19 +205,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_payment",
-                "Inspect payment contributing to settlement"
+                paymentId
             );
 
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement calculation"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "calculate_difference",
-                "Calculate settlement amount difference"
+                settlementId
             );
 
             break;
@@ -180,19 +227,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement associated with bank discrepancy"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_bank_transactions",
-                "Inspect corresponding bank transactions"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "calculate_difference",
-                "Calculate settlement versus bank difference"
+                settlementId
             );
 
             break;
@@ -202,19 +249,19 @@ namespace fincon
             addToolCall(
                 calls,
                 "get_settlement",
-                "Inspect settlement associated with accounting discrepancy"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "get_accounting_entries",
-                "Inspect accounting entries for settlement"
+                settlementId
             );
 
             addToolCall(
                 calls,
                 "calculate_difference",
-                "Calculate settlement versus accounting difference"
+                settlementId
             );
 
             break;
@@ -225,5 +272,4 @@ namespace fincon
 
         return calls;
     }
-
 }
