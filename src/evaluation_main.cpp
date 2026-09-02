@@ -1,28 +1,34 @@
-#include "domain/incident/FindingCorrelation.h"
-#include "domain/incident/IncidentBuilder.h"
+#include "application/evaluation/Phase2Evaluation.h"
+#include "application/evaluation/Phase2EvaluationRunner.h"
 
 #include "application/investigation/DefaultInvestigationService.h"
-#include "application/investigation/DeterministicEvidenceProvider.h"
-#include "application/investigation/DeterministicInvestigationPlanner.h"
 #include "application/investigation/InvestigationAgentOrchestrator.h"
+#include "application/investigation/DeterministicInvestigationPlanner.h"
 #include "application/investigation/InvestigationToolRegistry.h"
 #include "application/investigation/LLMConfiguration.h"
+
+#include "domain/incident/IncidentBuilder.h"
+#include "domain/incident/FindingCorrelation.h"
 
 #include "infrastructure/configuration/DotEnvLoader.h"
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
+
 #include "infrastructure/investigation/DeterministicDecisionPolicy.h"
+#include "application/investigation/DeterministicEvidenceProvider.h"
 #include "infrastructure/investigation/DeterministicHypothesisEngine.h"
 #include "infrastructure/investigation/DeterministicImpactCalculator.h"
 #include "infrastructure/investigation/DeterministicInvestigationCompletenessEvaluator.h"
 #include "infrastructure/investigation/DeterministicInvestigationEscalationPolicy.h"
-#include "infrastructure/investigation/DeterministicInvestigationToolRequestValidator.h"
 #include "infrastructure/investigation/DeterministicInvestigationResponseValidator.h"
+#include "infrastructure/investigation/DeterministicInvestigationToolRequestValidator.h"
 #include "infrastructure/investigation/InMemoryFinancialDataRepository.h"
+
 #include "infrastructure/investigation/JsonInvestigationResponseParser.h"
 #include "infrastructure/investigation/LibcurlHttpClient.h"
 #include "infrastructure/investigation/MetaLlamaInvestigationAgent.h"
 #include "infrastructure/investigation/MetaLlamaLLMProvider.h"
+
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
 
@@ -54,6 +60,9 @@ int main()
     constexpr std::uint64_t seed = 42;
     constexpr std::uint32_t exceptionRatePercent = 30;
 
+    constexpr std::size_t merchantCount = 100;
+    constexpr std::size_t ordersPerMerchant = 10;
+
     fincon::DotEnvLoader env("src/.env");
 
     fincon::LLMConfiguration llmConfiguration(
@@ -79,7 +88,10 @@ int main()
     fincon::FinancialDataGenerator generator(seed);
 
     fincon::FinancialDataset dataset =
-        generator.generate(2, 10);
+        generator.generate(
+            merchantCount,
+            ordersPerMerchant
+        );
 
     fincon::ExceptionInjector injector(
         seed,
@@ -232,7 +244,21 @@ int main()
         agentOrchestrator
     );
 
-    std::cout << "FinCon started\n\n";
+    fincon::Phase2Evaluation evaluation;
+
+    fincon::Phase2EvaluationRunner runner(
+        investigationService,
+        evaluation
+    );
+
+    const fincon::Phase2EvaluationResult result =
+        runner.run(
+            dataset,
+            exceptions,
+            incidents
+        );
+
+    std::cout << "FinCon Phase 2 Evaluation\n\n";
 
     std::cout << "Merchants: "
               << dataset.merchants.size()
@@ -246,196 +272,87 @@ int main()
               << dataset.payments.size()
               << '\n';
 
-    std::cout << "Refunds: "
-              << dataset.refunds.size()
-              << '\n';
-
-    std::cout << "Fees: "
-              << dataset.fees.size()
-              << '\n';
-
     std::cout << "Settlements: "
               << dataset.settlements.size()
               << '\n';
 
-    std::cout << "Bank transactions: "
-              << dataset.bankTransactions.size()
+    std::cout << "Injected exceptions: "
+              << result.injectedExceptions
               << '\n';
 
-    std::cout << "Accounting entries: "
-              << dataset.accountingEntries.size()
-              << '\n';
-
-    std::cout << "\nInjected exceptions: "
-              << exceptions.size()
-              << '\n';
-
-    for (const auto& exception : exceptions)
-    {
-        std::cout << exception.id
-                  << " | "
-                  << exception.reason
-                  << " | entities=";
-
-        for (std::size_t index = 0;
-             index < exception.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << exception.entityIds[index];
-        }
-
-        std::cout << " | impact="
-                  << exception.financialImpact
-                  << '\n';
-    }
-
-    std::cout << "\nReconciliation findings: "
+    std::cout << "Reconciliation findings: "
               << findings.size()
               << '\n';
 
-    for (const auto& finding : findings)
-    {
-        std::cout << finding.id
-                  << " | "
-                  << finding.ruleId
-                  << " | "
-                  << finding.description
-                  << " | entities=";
-
-        for (std::size_t index = 0;
-             index < finding.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << finding.entityIds[index];
-        }
-
-        std::cout << " | expected="
-                  << finding.expectedValue
-                  << " | observed="
-                  << finding.observedValue
-                  << " | impact="
-                  << finding.financialImpact
-                  << '\n';
-    }
-
-    std::cout << "\nFinding correlations: "
+    std::cout << "Finding correlations: "
               << correlations.size()
               << '\n';
 
-    for (const auto& correlation : correlations)
-    {
-        std::cout << correlation.id
-                  << " | findings=";
-
-        for (std::size_t index = 0;
-             index < correlation.findingIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << correlation.findingIds[index];
-        }
-
-        std::cout << " | entities=";
-
-        for (std::size_t index = 0;
-             index < correlation.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << correlation.entityIds[index];
-        }
-
-        std::cout << " | exposure="
-                  << correlation.financialExposure
-                  << '\n';
-    }
-
-    std::cout << "\nIncidents: "
-              << incidents.size()
+    std::cout << "Incidents: "
+              << result.incidents
               << '\n';
 
-    for (const auto& incident : incidents)
-    {
-        std::cout << incident.id()
-                  << " | type="
-                  << static_cast<int>(incident.type())
-                  << " | status="
-                  << static_cast<int>(incident.status())
-                  << " | impact="
-                  << incident.financialImpact()
-                  << " | findings=";
-
-        for (std::size_t index = 0;
-             index < incident.findingIds().size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << incident.findingIds()[index];
-        }
-
-        std::cout << " | entities=";
-
-        for (std::size_t index = 0;
-             index < incident.entityIds().size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << incident.entityIds()[index];
-        }
-
-        std::cout << '\n';
-    }
-
-    std::vector<fincon::Investigation> investigations;
-
-    investigations.reserve(incidents.size());
-
-    for (const auto& incident : incidents)
-    {
-        investigations.push_back(
-            investigationService.investigate(incident)
-        );
-    }
-
-    std::cout << "\nInvestigations: "
-              << investigations.size()
+    std::cout << "Investigations: "
+              << result.investigations
               << '\n';
 
-    for (const auto& investigation : investigations)
-    {
-        std::cout << investigation.id()
-                  << " | incident="
-                  << investigation.incidentId()
-                  << " | status="
-                  << static_cast<int>(investigation.status())
-                  << " | outcome="
-                  << static_cast<int>(investigation.outcome())
-                  << " | confidence="
-                  << static_cast<int>(investigation.confidence())
-                  << " | impact="
-                  << investigation.confirmedImpact()
-                  << " | evidence="
-                  << investigation.evidenceIds().size()
-                  << " | hypotheses="
-                  << investigation.hypothesisIds().size()
-                  << " | tools="
-                  << investigation.toolCallIds().size()
-                  << '\n';
-    }
+    std::cout << "Deterministic resolutions: "
+              << result.deterministicResolutions
+              << '\n';
 
-    return 0;
+    std::cout << "LLM resolutions: "
+              << result.llmResolutions
+              << '\n';
+
+    std::cout << "AUTO_RESOLVE: "
+              << result.autoResolved
+              << '\n';
+
+    std::cout << "HUMAN_REVIEW: "
+              << result.humanReview
+              << '\n';
+
+    std::cout << "REQUEST_MORE_EVIDENCE: "
+              << result.requestMoreEvidence
+              << '\n';
+
+    std::cout << "UNRESOLVED: "
+              << result.unresolved
+              << '\n';
+
+    std::cout << "Correct incident types: "
+              << result.correctIncidentTypes
+              << '/'
+              << result.investigations
+              << '\n';
+
+    std::cout << "Correct outcomes: "
+              << result.correctOutcomes
+              << '/'
+              << result.investigations
+              << '\n';
+
+    std::cout << "Correct impacts: "
+              << result.correctImpacts
+              << '/'
+              << result.investigations
+              << '\n';
+
+    std::cout << "Correct LLM escalations: "
+              << result.correctLLMEscalations
+              << '/'
+              << result.investigations
+              << '\n';
+
+    std::cout << "Correctly evaluated: "
+              << result.correctlyEvaluated
+              << '/'
+              << result.investigations
+              << '\n';
+
+    std::cout << "Evaluation: "
+              << (result.passed ? "PASSED" : "FAILED")
+              << '\n';
+
+    return result.passed ? 0 : 1;
 }

@@ -94,6 +94,11 @@ namespace fincon
             return hypothesisIds_;
         }
 
+        bool llmEscalated() const
+        {
+            return llmEscalated_;
+        }
+
         void setIncidentId(
             std::string incidentId)
         {
@@ -124,6 +129,13 @@ namespace fincon
         {
             confirmedImpact_ =
                 confirmedImpact;
+        }
+
+        void setLlmEscalated(
+            bool llmEscalated)
+        {
+            llmEscalated_ =
+                llmEscalated;
         }
 
         void addEvidence(
@@ -172,6 +184,8 @@ namespace fincon
         std::vector<std::string> toolCallIds_;
 
         std::vector<std::string> hypothesisIds_;
+
+        bool llmEscalated_ = false;
     };
 
 }

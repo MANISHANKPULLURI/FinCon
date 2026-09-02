@@ -13,7 +13,7 @@ namespace fincon
 
         virtual Investigation investigate(
             const Incident& incident
-        ) = 0;
+        ) const = 0;
     };
 
 }

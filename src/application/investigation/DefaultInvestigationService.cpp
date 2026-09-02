@@ -18,7 +18,7 @@
 namespace fincon
 {
     Investigation DefaultInvestigationService::investigate(
-        const Incident& incident)
+        const Incident& incident) const
     {
         Investigation investigation("INV-" + incident.id());
         investigation.setIncidentId(incident.id());
@@ -40,21 +40,29 @@ namespace fincon
                 InvestigationToolCall failedCall = plannedCall;
                 failedCall.setStatus(ToolCallStatus::Failed);
                 failedCall.setResult(
-                    "Investigation tool not registered: " +
+                    "Investigationtool not registered: " +
                     plannedCall.toolName()
                 );
-                context.toolCalls.push_back(std::move(failedCall));
+
+                context.toolCalls.push_back(
+                    std::move(failedCall)
+                );
+
                 continue;
             }
 
             InvestigationToolCall executedCall =
                 tool->execute(plannedCall);
 
-            context.toolCalls.push_back(std::move(executedCall));
+            context.toolCalls.push_back(
+                std::move(executedCall)
+            );
         }
 
         context.evidence =
-            evidenceProvider_.collect(incident.entityIds());
+            evidenceProvider_.collect(
+                incident.entityIds()
+            );
 
         context.hypotheses =
             hypothesisEngine_.generate(
@@ -77,16 +85,33 @@ namespace fincon
                 confirmedImpact
             );
 
-        for (const InvestigationEvidence& item : context.evidence)
-            investigation.addEvidence(item.id());
+        for (const InvestigationEvidence& item :
+             context.evidence)
+        {
+            investigation.addEvidence(
+                item.id()
+            );
+        }
 
-        for (const InvestigationHypothesis& hypothesis : context.hypotheses)
-            investigation.addHypothesis(hypothesis.id());
+        for (const InvestigationHypothesis& hypothesis :
+             context.hypotheses)
+        {
+            investigation.addHypothesis(
+                hypothesis.id()
+            );
+        }
 
-        for (const InvestigationToolCall& toolCall : context.toolCalls)
-            investigation.addToolCall(toolCall.id());
+        for (const InvestigationToolCall& toolCall :
+             context.toolCalls)
+        {
+            investigation.addToolCall(
+                toolCall.id()
+            );
+        }
 
-        investigation.setConfirmedImpact(decision.financialImpact());
+        investigation.setConfirmedImpact(
+            decision.financialImpact()
+        );
 
         investigation.setOutcome(
             [&decision]()
@@ -130,10 +155,29 @@ namespace fincon
         );
 
         const InvestigationCompleteness completeness =
-            completenessEvaluator_.evaluate(investigation);
+            completenessEvaluator_.evaluate(
+                investigation
+            );
+
+        if (decision.type() == DecisionType::AutoResolve &&
+            decision.confidence() == DecisionConfidence::High &&
+            decision.financialImpact() == 0 &&
+            !context.evidence.empty() &&
+            !context.toolCalls.empty())
+        {
+            investigation.setStatus(
+                InvestigationStatus::Completed
+            );
+
+            return investigation;
+        }
 
         if (completeness == InvestigationCompleteness::Incomplete)
-            investigation.setOutcome(InvestigationOutcome::Unknown);
+        {
+            investigation.setOutcome(
+                InvestigationOutcome::Unknown
+            );
+        }
 
         const EscalationDecision escalation =
             escalationPolicy_.evaluate(
@@ -143,21 +187,42 @@ namespace fincon
 
         if (escalation == EscalationDecision::EscalateToLLM)
         {
-            InvestigationRequest request("REQ-" + incident.id());
-            request.setIncidentId(incident.id());
-            request.setIncident(&incident);
+            investigation.setLlmEscalated(true);
 
-            for (const InvestigationEvidence& item : context.evidence)
+            InvestigationRequest request(
+                "REQ-" + incident.id()
+            );
+
+            request.setIncidentId(
+                incident.id()
+            );
+
+            request.setIncident(
+                &incident
+            );
+
+            for (const InvestigationEvidence& item :
+                 context.evidence)
+            {
                 request.addEvidence(item);
+            }
 
-            for (const InvestigationHypothesis& hypothesis : context.hypotheses)
+            for (const InvestigationHypothesis& hypothesis :
+                 context.hypotheses)
+            {
                 request.addHypothesis(hypothesis);
+            }
 
-            for (const InvestigationToolCall& toolCall : context.toolCalls)
+            for (const InvestigationToolCall& toolCall :
+                 context.toolCalls)
+            {
                 request.addToolCall(toolCall);
+            }
 
             const InvestigationResponse response =
-                agentOrchestrator_.investigate(std::move(request));
+                agentOrchestrator_.investigate(
+                    std::move(request)
+                );
 
             investigation.setConfirmedImpact(
                 response.decision().financialImpact()
@@ -205,7 +270,9 @@ namespace fincon
             );
         }
 
-        investigation.setStatus(InvestigationStatus::Completed);
+        investigation.setStatus(
+            InvestigationStatus::Completed
+        );
 
         return investigation;
     }

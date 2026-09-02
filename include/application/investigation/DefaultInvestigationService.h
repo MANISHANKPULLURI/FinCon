@@ -30,7 +30,7 @@ namespace fincon
 
         Investigation investigate(
             const Incident& incident
-        ) override;
+        ) const override;
 
     private:
         const InvestigationPlanner& planner_;
