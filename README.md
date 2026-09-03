@@ -35,34 +35,9 @@ $$\text{Exception} \longrightarrow \text{Evidence} \longrightarrow \text{Root Ca
 
 When the evidence is insufficient or the risk is too high, FinCon does not guess. It can request more evidence, escalate the case for human review, or mark it as unresolved.
 
----
-
-## Run with Docker
-
-```bash
-docker compose up --build
-```
-
-* Frontend: http://localhost:3000
-* Backend: http://localhost:8080 (health `GET /health`)
-* Stop: `docker compose down`
-* Rebuild: `docker compose up --build --force-recreate`
-
-Optional synthetic producer (against Docker backend):
-```bash
-docker compose --profile producer run --rm producer
-# or host: python tools/data_producer/producer.py --server-url http://localhost:8080 --continuous --delay 2
-```
-
-Environment variables (optional LLM):
-```bash
-cp .env.example .env   # or src/.env
-# edit MUSE_API_KEY=... MUSE_MODEL=...
-docker compose up --build
-```
-`.env` is ignored and never baked into the image; `FINCON_WORKERS=2` controls worker count.
-
----
+___
+Refer .env.example for env structure required
+___
 
 ## Tech Stack
 
@@ -387,7 +362,7 @@ docker compose down
 
 The dashboard provides a live view of the complete FinCon financial investigation pipeline, including ingestion, processing, reconciliation, exceptions, investigations, financial impact, confidence, decisions, recommendations, audit activity, and live streaming transaction data.
 
-![FinCon Dashboard](./Dashboard.png)
+![FinCon Dashboard](./DashBoard.png)
 
 ## Exception Investigation
 
