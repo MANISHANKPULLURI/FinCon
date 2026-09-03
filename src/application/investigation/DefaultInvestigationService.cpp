@@ -1,4 +1,3 @@
-
 #include "application/investigation/DefaultInvestigationService.h"
 
 #include "application/investigation/InvestigationContext.h"
@@ -230,6 +229,27 @@ namespace fincon
                 InvestigationStatus::Completed
             );
 
+            const InvestigationRecommendation recommendation =
+                recommendationPolicy_.recommend(
+                    incident,
+                    investigation,
+                    decision,
+                    context.evidence
+                );
+
+            investigation.setRecommendation(
+                recommendation
+            );
+
+            auditService_.record(
+                investigation.id(),
+                incident.id(),
+                AuditEventType::RecommendationCreated,
+                "recommendation-policy",
+                recommendation.rationale(),
+                recommendation.financialImpact()
+            );
+
             auditService_.record(
                 investigation.id(),
                 incident.id(),
@@ -302,14 +322,16 @@ namespace fincon
                     std::move(request)
                 );
 
+            decision = response.decision();
+
             investigation.setConfirmedImpact(
-                response.decision().financialImpact()
+                decision.financialImpact()
             );
 
             investigation.setOutcome(
-                [&response]()
+                [&decision]()
                 {
-                    switch (response.decision().type())
+                    switch (decision.type())
                     {
                     case DecisionType::AutoResolve:
                         return InvestigationOutcome::AutoResolve;
@@ -329,9 +351,9 @@ namespace fincon
             );
 
             investigation.setConfidence(
-                [&response]()
+                [&decision]()
                 {
-                    switch (response.decision().confidence())
+                    switch (decision.confidence())
                     {
                     case DecisionConfidence::Low:
                         return ConfidenceLevel::Low;
@@ -352,10 +374,31 @@ namespace fincon
                 incident.id(),
                 AuditEventType::DecisionMade,
                 "llm-agent",
-                response.decision().rationale(),
-                response.decision().financialImpact()
+                decision.rationale(),
+                decision.financialImpact()
             );
         }
+
+        const InvestigationRecommendation recommendation =
+            recommendationPolicy_.recommend(
+                incident,
+                investigation,
+                decision,
+                context.evidence
+            );
+
+        investigation.setRecommendation(
+            recommendation
+        );
+
+        auditService_.record(
+            investigation.id(),
+            incident.id(),
+            AuditEventType::RecommendationCreated,
+            "recommendation-policy",
+            recommendation.rationale(),
+            recommendation.financialImpact()
+        );
 
         investigation.setStatus(
             InvestigationStatus::Completed

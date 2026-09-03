@@ -173,10 +173,13 @@ add_library(fincon_core
     src/application/evaluation/Phase2Evaluation.cpp
     src/application/evaluation/Phase2EvaluationScenario.cpp
     src/application/evaluation/Phase2EvaluationRunner.cpp
-    src/infrastructure/investigation/InMemoryInvestigationAuditRepository.cpp
     src/application/investigation/InvestigationAuditService.cpp
     src/infrastructure/investigation/InMemoryInvestigationAuditRepository.cpp
     src/infrastructure/investigation/DeterministicRecommendationPolicy.cpp
+    src/application/controller/FinanceControllerFacade.cpp
+    src/application/controller/FinanceControllerApi.cpp
+    src/infrastructure/http/SimpleHttpServer.cpp
+    src/application/state/FinanceControllerState.cpp
 )
 
 target_include_directories(fincon_core

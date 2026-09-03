@@ -1,6 +1,9 @@
 #include "domain/incident/FindingCorrelation.h"
 #include "domain/incident/IncidentBuilder.h"
 
+#include "application/controller/FinanceControllerApi.h"
+#include "application/controller/FinanceControllerFacade.h"
+
 #include "application/investigation/DefaultInvestigationService.h"
 #include "application/investigation/DeterministicEvidenceProvider.h"
 #include "application/investigation/DeterministicInvestigationPlanner.h"
@@ -27,6 +30,8 @@
 #include "infrastructure/investigation/LibcurlHttpClient.h"
 #include "infrastructure/investigation/MetaLlamaInvestigationAgent.h"
 #include "infrastructure/investigation/MetaLlamaLLMProvider.h"
+#include "infrastructure/http/SimpleHttpServer.h"
+
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
 
@@ -48,9 +53,11 @@
 #include "infrastructure/investigation/tools/GetRelatedTransactionsTool.h"
 #include "infrastructure/investigation/tools/GetSettlementTool.h"
 
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <thread>
 #include <vector>
 
 int main()
@@ -413,12 +420,16 @@ int main()
 
     std::vector<fincon::Investigation> investigations;
 
-    investigations.reserve(incidents.size());
+    investigations.reserve(
+        incidents.size()
+    );
 
     for (const auto& incident : incidents)
     {
         investigations.push_back(
-            investigationService.investigate(incident)
+            investigationService.investigate(
+                incident
+            )
         );
     }
 
@@ -448,5 +459,32 @@ int main()
                   << '\n';
     }
 
-    return 0;
+    fincon::FinanceControllerFacade facade(
+        investigationService,
+        auditRepository
+    );
+
+    fincon::FinanceControllerApi api(
+        facade
+    );
+
+    fincon::SimpleHttpServer server;
+
+    api.registerRoutes(
+        server
+    );
+
+    server.start(
+        8080
+    );
+
+    std::cout << "\nFinCon HTTP server running on port 8080\n";
+    std::cout << "Health: http://localhost:8080/health\n";
+
+    while (true)
+    {
+        std::this_thread::sleep_for(
+            std::chrono::seconds(1)
+        );
+    }
 }

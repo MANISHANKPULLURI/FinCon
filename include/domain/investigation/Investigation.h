@@ -1,15 +1,15 @@
 #pragma once
 
-#include "common/Money.h"
+#include "domain/investigation/InvestigationRecommendation.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace fincon
 {
-
     enum class InvestigationStatus
     {
         Pending,
@@ -37,14 +37,12 @@ namespace fincon
         High
     };
 
-    class Investigation final
+    class Investigation
     {
     public:
-
         Investigation() = default;
 
-        explicit Investigation(
-            std::string id)
+        explicit Investigation(std::string id)
             : id_(std::move(id))
         {
         }
@@ -74,7 +72,7 @@ namespace fincon
             return confidence_;
         }
 
-        Money confirmedImpact() const
+        std::int64_t confirmedImpact() const
         {
             return confirmedImpact_;
         }
@@ -99,93 +97,79 @@ namespace fincon
             return llmEscalated_;
         }
 
-        void setIncidentId(
-            std::string incidentId)
+        const InvestigationRecommendation* recommendation() const
         {
-            incidentId_ =
-                std::move(incidentId);
+            return recommendation_ ? &(*recommendation_) : nullptr;
         }
 
-        void setStatus(
-            InvestigationStatus status)
+        void setIncidentId(std::string incidentId)
+        {
+            incidentId_ = std::move(incidentId);
+        }
+
+        void setStatus(InvestigationStatus status)
         {
             status_ = status;
         }
 
-        void setOutcome(
-            InvestigationOutcome outcome)
+        void setOutcome(InvestigationOutcome outcome)
         {
             outcome_ = outcome;
         }
 
-        void setConfidence(
-            ConfidenceLevel confidence)
+        void setConfidence(ConfidenceLevel confidence)
         {
             confidence_ = confidence;
         }
 
-        void setConfirmedImpact(
-            Money confirmedImpact)
+        void setConfirmedImpact(std::int64_t confirmedImpact)
         {
-            confirmedImpact_ =
-                confirmedImpact;
+            confirmedImpact_ = confirmedImpact;
         }
 
-        void setLlmEscalated(
-            bool llmEscalated)
+        void addEvidence(std::string evidenceId)
         {
-            llmEscalated_ =
-                llmEscalated;
+            evidenceIds_.push_back(std::move(evidenceId));
         }
 
-        void addEvidence(
-            std::string evidenceId)
+        void addToolCall(std::string toolCallId)
         {
-            evidenceIds_.push_back(
-                std::move(evidenceId)
-            );
+            toolCallIds_.push_back(std::move(toolCallId));
         }
 
-        void addToolCall(
-            std::string toolCallId)
+        void addHypothesis(std::string hypothesisId)
         {
-            toolCallIds_.push_back(
-                std::move(toolCallId)
-            );
+            hypothesisIds_.push_back(std::move(hypothesisId));
         }
 
-        void addHypothesis(
-            std::string hypothesisId)
+        void setLlmEscalated(bool llmEscalated)
         {
-            hypothesisIds_.push_back(
-                std::move(hypothesisId)
-            );
+            llmEscalated_ = llmEscalated;
+        }
+
+        void setRecommendation(
+            InvestigationRecommendation recommendation
+        )
+        {
+            recommendation_ = std::move(recommendation);
         }
 
     private:
-
         std::string id_;
-
         std::string incidentId_;
 
-        InvestigationStatus status_ =
-            InvestigationStatus::Pending;
+        InvestigationStatus status_ = InvestigationStatus::Pending;
+        InvestigationOutcome outcome_ = InvestigationOutcome::Unknown;
+        ConfidenceLevel confidence_ = ConfidenceLevel::Unknown;
 
-        InvestigationOutcome outcome_ =
-            InvestigationOutcome::Unknown;
-
-        ConfidenceLevel confidence_ =
-            ConfidenceLevel::Unknown;
-
-        Money confirmedImpact_{0};
+        std::int64_t confirmedImpact_ = 0;
 
         std::vector<std::string> evidenceIds_;
-
         std::vector<std::string> toolCallIds_;
-
         std::vector<std::string> hypothesisIds_;
 
         bool llmEscalated_ = false;
-    };
 
+        std::optional<InvestigationRecommendation> recommendation_;
+    };
 }
