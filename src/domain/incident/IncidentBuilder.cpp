@@ -14,46 +14,34 @@ namespace fincon
         IncidentType determineIncidentType(
             const FindingCorrelation& correlation)
         {
-            for (const std::string& findingId :
-                 correlation.findingIds)
+            for (const std::string& ruleId : correlation.ruleIds)
             {
-                if (findingId == "RF-11" ||
-                    findingId == "RF-13" ||
-                    findingId == "RF-7" ||
-                    findingId == "RF-16")
-                {
+                if (ruleId == "DUPLICATE_RECORD_RECONCILIATION")
                     return IncidentType::DuplicateRecord;
-                }
-
-                if (findingId == "RF-10" ||
-                    findingId == "RF-12")
+                if (ruleId == "MISSING_SETTLEMENT_RECONCILIATION" || ruleId == "PAYMENT_SETTLEMENT_MATCHING")
                 {
-                    return IncidentType::MissingRecord;
+                    bool hasDup = false;
+                    for (auto &r : correlation.ruleIds) if (r == "DUPLICATE_RECORD_RECONCILIATION") hasDup = true;
+                    if (!hasDup) return IncidentType::MissingRecord;
                 }
-
-                if (findingId == "RF-3")
-                {
+                if (ruleId == "SETTLEMENT_REFUND_RECONCILIATION" || ruleId == "REFUND_RECONCILIATION")
                     return IncidentType::RefundIssue;
-                }
-
-                if (findingId == "RF-4")
-                {
+                if (ruleId == "SETTLEMENT_FEE_RECONCILIATION")
                     return IncidentType::FeeIssue;
-                }
-
-                if (findingId == "RF-8" ||
-                    findingId == "RF-9")
-                {
+                if (ruleId == "SETTLEMENT_TIMING_RECONCILIATION")
                     return IncidentType::TimingIssue;
-                }
-
-                if (findingId == "RF-1" ||
-                    findingId == "RF-2")
-                {
+                if (ruleId == "SETTLEMENT_CALCULATION_RECONCILIATION")
                     return IncidentType::SettlementIssue;
-                }
+                if (ruleId == "SETTLEMENT_BANK_RECONCILIATION")
+                    return IncidentType::BankIssue;
+                if (ruleId == "SETTLEMENT_ACCOUNTING_RECONCILIATION")
+                    return IncidentType::AccountingIssue;
             }
-
+            for (const std::string& fid : correlation.findingIds)
+            {
+                if (fid.rfind("FC-DUPLICATE",0)==0) return IncidentType::DuplicateRecord;
+                if (fid.rfind("FC-MISSING",0)==0) return IncidentType::MissingRecord;
+            }
             return IncidentType::Unknown;
         }
 

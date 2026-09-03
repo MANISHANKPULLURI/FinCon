@@ -11,42 +11,53 @@ namespace fincon
         const std::vector<AccountingEntry>& accountingEntries,
         const std::vector<Fee>& fees)
     {
-        for (const Payment& payment : payments)
+        FinancialDataset initial;
+        initial.payments = payments;
+        initial.settlements = settlements;
+        initial.refunds = refunds;
+        initial.bankTransactions = bankTransactions;
+        initial.accountingEntries = accountingEntries;
+        initial.fees = fees;
+        appendBatch(initial);
+    }
+
+    void InMemoryFinancialDataRepository::appendBatch(
+        const FinancialDataset& batch)
+    {
+        std::unique_lock lock(mutex_);
+        for (const Payment& payment : batch.payments)
         {
-            payments_[payment.id] = &payment;
+            paymentStorage_.push_back(payment);
+            payments_[paymentStorage_.back().id] = &paymentStorage_.back();
         }
-
-        for (const Settlement& settlement : settlements)
+        for (const Settlement& settlement : batch.settlements)
         {
-            settlements_[settlement.id] = &settlement;
+            settlementStorage_.push_back(settlement);
+            settlements_[settlementStorage_.back().id] = &settlementStorage_.back();
         }
-
-        for (const Refund& refund : refunds)
+        for (const Refund& refund : batch.refunds)
         {
-            refunds_[refund.id] = &refund;
-            refundsByPayment_[refund.paymentId].push_back(&refund);
+            refundStorage_.push_back(refund);
+            refunds_[refundStorage_.back().id] = &refundStorage_.back();
+            refundsByPayment_[refundStorage_.back().paymentId].push_back(&refundStorage_.back());
         }
-
-        for (const BankTransaction& transaction : bankTransactions)
+        for (const BankTransaction& transaction : batch.bankTransactions)
         {
-            bankTransactions_[transaction.id] = &transaction;
-
-            bankTransactionsBySettlement_[transaction.settlementId]
-                .push_back(&transaction);
+            bankTransactionStorage_.push_back(transaction);
+            bankTransactions_[bankTransactionStorage_.back().id] = &bankTransactionStorage_.back();
+            bankTransactionsBySettlement_[bankTransactionStorage_.back().settlementId].push_back(&bankTransactionStorage_.back());
         }
-
-        for (const AccountingEntry& entry : accountingEntries)
+        for (const AccountingEntry& entry : batch.accountingEntries)
         {
-            accountingEntries_[entry.id] = &entry;
-
-            accountingEntriesBySettlement_[entry.reference]
-                .push_back(&entry);
+            accountingEntryStorage_.push_back(entry);
+            accountingEntries_[accountingEntryStorage_.back().id] = &accountingEntryStorage_.back();
+            accountingEntriesBySettlement_[accountingEntryStorage_.back().reference].push_back(&accountingEntryStorage_.back());
         }
-
-        for (const Fee& fee : fees)
+        for (const Fee& fee : batch.fees)
         {
-            fees_[fee.id] = &fee;
-            feesByPayment_[fee.paymentId].push_back(&fee);
+            feeStorage_.push_back(fee);
+            fees_[feeStorage_.back().id] = &feeStorage_.back();
+            feesByPayment_[feeStorage_.back().paymentId].push_back(&feeStorage_.back());
         }
     }
 
@@ -54,6 +65,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getPayment(
         const std::string& paymentId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator = payments_.find(paymentId);
 
         if (iterator == payments_.end())
@@ -68,6 +80,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getSettlement(
         const std::string& settlementId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator = settlements_.find(settlementId);
 
         if (iterator == settlements_.end())
@@ -82,6 +95,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getRefund(
         const std::string& refundId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator = refunds_.find(refundId);
 
         if (iterator == refunds_.end())
@@ -96,6 +110,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getBankTransaction(
         const std::string& bankTransactionId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             bankTransactions_.find(bankTransactionId);
 
@@ -111,6 +126,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getAccountingEntry(
         const std::string& accountingEntryId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             accountingEntries_.find(accountingEntryId);
 
@@ -126,6 +142,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getFee(
         const std::string& feeId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator = fees_.find(feeId);
 
         if (iterator == fees_.end())
@@ -140,6 +157,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getRefunds(
         const std::string& paymentId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             refundsByPayment_.find(paymentId);
 
@@ -155,6 +173,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getBankTransactions(
         const std::string& settlementId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             bankTransactionsBySettlement_.find(settlementId);
 
@@ -170,6 +189,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getAccountingEntries(
         const std::string& settlementId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             accountingEntriesBySettlement_.find(settlementId);
 
@@ -185,6 +205,7 @@ namespace fincon
     InMemoryFinancialDataRepository::getFees(
         const std::string& paymentId) const
     {
+        std::shared_lock lock(mutex_);
         const auto iterator =
             feesByPayment_.find(paymentId);
 

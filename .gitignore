@@ -1,10 +1,87 @@
-# CMake build directory
-build/
-
-# macOS
-.DS_Store
-
-# IDE
-.vscode/
-.idea/
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# C++ / CMake
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.ninja
+.ninja_*
+Testing/
+CTestTestfile.cmake
+Makefile
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Frontend
+node_modules/
+dist/
+.vite/
+.svelte-kit/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Runtime / logs
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.pid
+*.lock
+
+# Test / sanitizer
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+asan/
+ubsan/
+tsan/
+sanitizer-results/
+test-results/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated datasets / reports
+data/generated/
+datasets/generated/
+reports/generated/
+output/
+artifacts/
+*.generated.json
+*.generated.jsonl
+*.generated.csv

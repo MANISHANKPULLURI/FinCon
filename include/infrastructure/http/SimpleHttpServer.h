@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace fincon
 {
@@ -50,6 +51,10 @@ namespace fincon
             int port
         );
 
+        void handleClient(
+            int clientSocket
+        );
+
         std::unordered_map<std::string, Route> routes_;
 
         mutable std::mutex mutex_;
@@ -57,6 +62,10 @@ namespace fincon
         std::atomic<bool> running_{false};
 
         std::thread serverThread_;
+
+        std::vector<std::thread> clientThreads_;
+        mutable std::mutex clientMutex_;
+        static constexpr std::size_t kMaxClients = 64;
 
         int serverSocket_ = -1;
     };

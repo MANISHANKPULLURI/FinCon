@@ -16,6 +16,8 @@ namespace fincon
 
         std::vector<std::string> entityIds;
 
+        std::vector<std::string> ruleIds;
+
         Money financialExposure{0};
     };
 

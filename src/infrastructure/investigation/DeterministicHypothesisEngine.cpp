@@ -263,6 +263,28 @@ namespace fincon
             hypotheses.push_back(std::move(hypothesis));
         }
 
+        if (incident.type() == IncidentType::MissingRecord &&
+            (hasEvidenceType(evidence, EvidenceType::Payment) || hasEvidenceType(evidence, EvidenceType::Settlement)))
+        {
+            InvestigationHypothesis hypothesis =
+                createHypothesis(
+                    "HYP-MISSING-1",
+                    "Expected settlement or payment record is missing for the investigated entity",
+                    HypothesisStatus::Supported,
+                    85,
+                    incidentImpact
+                );
+
+            if (hasEvidenceType(evidence, EvidenceType::Payment))
+                addEvidenceByType(hypothesis, evidence, EvidenceType::Payment);
+            if (hasEvidenceType(evidence, EvidenceType::Settlement))
+                addEvidenceByType(hypothesis, evidence, EvidenceType::Settlement);
+            if (hasEvidenceType(evidence, EvidenceType::ReconciliationFinding))
+                addEvidenceByType(hypothesis, evidence, EvidenceType::ReconciliationFinding);
+
+            hypotheses.push_back(std::move(hypothesis));
+        }
+
         return hypotheses;
     }
 }

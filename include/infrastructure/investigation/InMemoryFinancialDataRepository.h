@@ -1,8 +1,11 @@
 #pragma once
 
 #include "application/investigation/FinancialDataRepository.h"
+#include "infrastructure/generator/FinancialDataGenerator.h"
 
+#include <shared_mutex>
 #include <string>
+#include <deque>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +24,8 @@ namespace fincon
             const std::vector<AccountingEntry>& accountingEntries,
             const std::vector<Fee>& fees
         );
+
+        void appendBatch(const FinancialDataset& batch);
 
         const Payment* getPayment(
             const std::string& paymentId
@@ -63,6 +68,14 @@ namespace fincon
         ) const override;
 
     private:
+        mutable std::shared_mutex mutex_;
+        std::deque<Payment> paymentStorage_;
+        std::deque<Settlement> settlementStorage_;
+        std::deque<Refund> refundStorage_;
+        std::deque<BankTransaction> bankTransactionStorage_;
+        std::deque<AccountingEntry> accountingEntryStorage_;
+        std::deque<Fee> feeStorage_;
+
         std::unordered_map<std::string, const Payment*> payments_;
         std::unordered_map<std::string, const Settlement*> settlements_;
         std::unordered_map<std::string, const Refund*> refunds_;

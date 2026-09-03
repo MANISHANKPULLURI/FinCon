@@ -180,6 +180,7 @@ add_library(fincon_core
     src/application/controller/FinanceControllerApi.cpp
     src/infrastructure/http/SimpleHttpServer.cpp
     src/application/state/FinanceControllerState.cpp
+    src/application/ingestion/FinancialFieldMapper.cpp
 )
 
 target_include_directories(fincon_core

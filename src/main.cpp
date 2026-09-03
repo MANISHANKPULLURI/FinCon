@@ -1,17 +1,18 @@
 #include "domain/incident/FindingCorrelation.h"
 #include "domain/incident/IncidentBuilder.h"
-
 #include "application/controller/FinanceControllerApi.h"
 #include "application/controller/FinanceControllerFacade.h"
-
+#include "application/evaluation/Phase2Evaluation.h"
+#include "application/evaluation/Phase2EvaluationScenario.h"
 #include "application/investigation/DefaultInvestigationService.h"
 #include "application/investigation/DeterministicEvidenceProvider.h"
 #include "application/investigation/DeterministicInvestigationPlanner.h"
 #include "application/investigation/InvestigationAgentOrchestrator.h"
 #include "application/investigation/InvestigationToolRegistry.h"
+#include "application/ingestion/FinancialDataBatch.h"
+#include "application/ingestion/MessageQueue.h"
+#include "application/state/FinanceControllerState.h"
 #include "application/investigation/LLMConfiguration.h"
-#include "application/investigation/RecommendationPolicy.h"
-
 #include "infrastructure/configuration/DotEnvLoader.h"
 #include "infrastructure/exception/ExceptionInjector.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
@@ -31,10 +32,8 @@
 #include "infrastructure/investigation/MetaLlamaInvestigationAgent.h"
 #include "infrastructure/investigation/MetaLlamaLLMProvider.h"
 #include "infrastructure/http/SimpleHttpServer.h"
-
 #include "infrastructure/reconciliation/ReconciliationEngine.h"
 #include "infrastructure/reconciliation/ReconciliationFindingCorrelator.h"
-
 #include "infrastructure/reconciliation/rules/DuplicateRecordRule.h"
 #include "infrastructure/reconciliation/rules/MissingRecordRule.h"
 #include "infrastructure/reconciliation/rules/PaymentSettlementMatchingRule.h"
@@ -44,7 +43,6 @@
 #include "infrastructure/reconciliation/rules/SettlementFeeRule.h"
 #include "infrastructure/reconciliation/rules/SettlementRefundRule.h"
 #include "infrastructure/reconciliation/rules/SettlementTimingRule.h"
-
 #include "infrastructure/investigation/tools/CalculateDifferenceTool.h"
 #include "infrastructure/investigation/tools/GetAccountingEntriesTool.h"
 #include "infrastructure/investigation/tools/GetBankTransactionsTool.h"
@@ -52,439 +50,175 @@
 #include "infrastructure/investigation/tools/GetRefundsTool.h"
 #include "infrastructure/investigation/tools/GetRelatedTransactionsTool.h"
 #include "infrastructure/investigation/tools/GetSettlementTool.h"
-
+#include <atomic>
 #include <chrono>
+#include <csignal>
+#include <cstdlib>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <thread>
 #include <vector>
-
+namespace
+{
+    std::atomic<bool> shutdownRequested{false};
+    void requestShutdown(int) { shutdownRequested.store(true); }
+    std::size_t workerCountFromEnv()
+    {
+        const char* v = std::getenv("FINCON_WORKERS");
+        if (v == nullptr) return 1;
+        try { auto n = std::stoul(v); return n == 0 ? 1 : n; } catch (...) { return 1; }
+    }
+}
 int main()
 {
-    constexpr std::uint64_t seed = 42;
-    constexpr std::uint32_t exceptionRatePercent = 30;
-
     fincon::DotEnvLoader env("src/.env");
-
-    fincon::LLMConfiguration llmConfiguration(
-        env.get("MUSE_API_KEY"),
-        env.get("MUSE_MODEL")
-    );
-
+    fincon::LLMConfiguration llmConfiguration(env.get("MUSE_API_KEY"), env.get("MUSE_MODEL"));
     fincon::LibcurlHttpClient httpClient;
-
-    fincon::MetaLlamaLLMProvider llmProvider(
-        httpClient,
-        llmConfiguration.apiKey(),
-        llmConfiguration.model()
-    );
-
+    fincon::MetaLlamaLLMProvider llmProvider(httpClient, llmConfiguration.apiKey(), llmConfiguration.model());
     fincon::JsonInvestigationResponseParser responseParser;
-
-    fincon::MetaLlamaInvestigationAgent investigationAgent(
-        llmProvider,
-        responseParser
-    );
-
-    fincon::FinancialDataGenerator generator(seed);
-
-    fincon::FinancialDataset dataset =
-        generator.generate(2, 10);
-
-    fincon::ExceptionInjector injector(
-        seed,
-        fincon::ExceptionInjectionMode::Coverage
-    );
-
-    const std::vector<fincon::InjectedException> exceptions =
-        injector.inject(
-            dataset,
-            exceptionRatePercent
-        );
-
-    fincon::ReconciliationEngine reconciliationEngine;
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementCalculationRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementRefundRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementFeeRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementBankRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementTimingRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::MissingRecordRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::DuplicateRecordRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::PaymentSettlementMatchingRule>()
-    );
-
-    reconciliationEngine.addRule(
-        std::make_unique<fincon::SettlementAccountingRule>()
-    );
-
-    const std::vector<fincon::ReconciliationFinding> findings =
-        reconciliationEngine.reconcile(dataset);
-
-    fincon::ReconciliationFindingCorrelator correlator;
-
-    const std::vector<fincon::FindingCorrelation> correlations =
-        correlator.correlate(findings);
-
-    fincon::IncidentBuilder incidentBuilder;
-
-    const std::vector<fincon::Incident> incidents =
-        incidentBuilder.build(correlations);
-
-    fincon::InMemoryFinancialDataRepository repository(
-        dataset.payments,
-        dataset.settlements,
-        dataset.refunds,
-        dataset.bankTransactions,
-        dataset.accountingEntries,
-        dataset.fees
-    );
-
+    fincon::MetaLlamaInvestigationAgent investigationAgent(llmProvider, responseParser);
+    fincon::InMemoryFinancialDataRepository repository({}, {}, {}, {}, {}, {});
     fincon::InMemoryInvestigationAuditRepository auditRepository;
     fincon::InvestigationAuditService auditService(auditRepository);
-
-    fincon::DeterministicEvidenceProvider evidenceProvider(
-        repository
-    );
-
+    fincon::DeterministicEvidenceProvider evidenceProvider(repository);
     fincon::DeterministicHypothesisEngine hypothesisEngine;
-
     fincon::DeterministicImpactCalculator impactCalculator;
-
     fincon::DeterministicDecisionPolicy decisionPolicy;
-
     fincon::InvestigationToolRegistry toolRegistry;
-
-    toolRegistry.registerTool(
-        "get_payment",
-        std::make_unique<fincon::GetPaymentTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "get_settlement",
-        std::make_unique<fincon::GetSettlementTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "get_refunds",
-        std::make_unique<fincon::GetRefundsTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "get_bank_transactions",
-        std::make_unique<fincon::GetBankTransactionsTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "get_accounting_entries",
-        std::make_unique<fincon::GetAccountingEntriesTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "get_related_transactions",
-        std::make_unique<fincon::GetRelatedTransactionsTool>(repository)
-    );
-
-    toolRegistry.registerTool(
-        "calculate_difference",
-        std::make_unique<fincon::CalculateDifferenceTool>(repository)
-    );
-
-    fincon::DeterministicInvestigationToolRequestValidator
-        toolRequestValidator;
-
-    fincon::DeterministicInvestigationResponseValidator
-        responseValidator;
-
-    fincon::InvestigationAgentOrchestrator agentOrchestrator(
-        investigationAgent,
-        toolRegistry,
-        toolRequestValidator,
-        responseValidator
-    );
-
+    toolRegistry.registerTool("get_payment", std::make_unique<fincon::GetPaymentTool>(repository));
+    toolRegistry.registerTool("get_settlement", std::make_unique<fincon::GetSettlementTool>(repository));
+    toolRegistry.registerTool("get_refunds", std::make_unique<fincon::GetRefundsTool>(repository));
+    toolRegistry.registerTool("get_bank_transactions", std::make_unique<fincon::GetBankTransactionsTool>(repository));
+    toolRegistry.registerTool("get_accounting_entries", std::make_unique<fincon::GetAccountingEntriesTool>(repository));
+    toolRegistry.registerTool("get_related_transactions", std::make_unique<fincon::GetRelatedTransactionsTool>(repository));
+    toolRegistry.registerTool("calculate_difference", std::make_unique<fincon::CalculateDifferenceTool>(repository));
+    fincon::DeterministicInvestigationToolRequestValidator toolRequestValidator;
+    fincon::DeterministicInvestigationResponseValidator responseValidator;
+    fincon::InvestigationAgentOrchestrator agentOrchestrator(investigationAgent, toolRegistry, toolRequestValidator, responseValidator);
     fincon::DeterministicInvestigationPlanner planner;
-
-    fincon::DeterministicInvestigationCompletenessEvaluator
-        completenessEvaluator;
-
-    fincon::DeterministicInvestigationEscalationPolicy
-        escalationPolicy;
-
+    fincon::DeterministicInvestigationCompletenessEvaluator completenessEvaluator;
+    fincon::DeterministicInvestigationEscalationPolicy escalationPolicy;
     fincon::DeterministicRecommendationPolicy recommendationPolicy;
-
-    fincon::DefaultInvestigationService investigationService(
-        planner,
-        evidenceProvider,
-        hypothesisEngine,
-        impactCalculator,
-        decisionPolicy,
-        toolRegistry,
-        completenessEvaluator,
-        escalationPolicy,
-        agentOrchestrator,
-        auditService,
-        recommendationPolicy
-    );
-
-    std::cout << "FinCon started\n\n";
-
-    std::cout << "Merchants: "
-              << dataset.merchants.size()
-              << '\n';
-
-    std::cout << "Orders: "
-              << dataset.orders.size()
-              << '\n';
-
-    std::cout << "Payments: "
-              << dataset.payments.size()
-              << '\n';
-
-    std::cout << "Refunds: "
-              << dataset.refunds.size()
-              << '\n';
-
-    std::cout << "Fees: "
-              << dataset.fees.size()
-              << '\n';
-
-    std::cout << "Settlements: "
-              << dataset.settlements.size()
-              << '\n';
-
-    std::cout << "Bank transactions: "
-              << dataset.bankTransactions.size()
-              << '\n';
-
-    std::cout << "Accounting entries: "
-              << dataset.accountingEntries.size()
-              << '\n';
-
-    std::cout << "\nInjected exceptions: "
-              << exceptions.size()
-              << '\n';
-
-    for (const auto& exception : exceptions)
-    {
-        std::cout << exception.id
-                  << " | "
-                  << exception.reason
-                  << " | entities=";
-
-        for (std::size_t index = 0;
-             index < exception.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << exception.entityIds[index];
-        }
-
-        std::cout << " | impact="
-                  << exception.financialImpact
-                  << '\n';
-    }
-
-    std::cout << "\nReconciliation findings: "
-              << findings.size()
-              << '\n';
-
-    for (const auto& finding : findings)
-    {
-        std::cout << finding.id
-                  << " | "
-                  << finding.ruleId
-                  << " | "
-                  << finding.description
-                  << " | entities=";
-
-        for (std::size_t index = 0;
-             index < finding.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << finding.entityIds[index];
-        }
-
-        std::cout << " | expected="
-                  << finding.expectedValue
-                  << " | observed="
-                  << finding.observedValue
-                  << " | impact="
-                  << finding.financialImpact
-                  << '\n';
-    }
-
-    std::cout << "\nFinding correlations: "
-              << correlations.size()
-              << '\n';
-
-    for (const auto& correlation : correlations)
-    {
-        std::cout << correlation.id
-                  << " | findings=";
-
-        for (std::size_t index = 0;
-             index < correlation.findingIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << correlation.findingIds[index];
-        }
-
-        std::cout << " | entities=";
-
-        for (std::size_t index = 0;
-             index < correlation.entityIds.size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << correlation.entityIds[index];
-        }
-
-        std::cout << " | exposure="
-                  << correlation.financialExposure
-                  << '\n';
-    }
-
-    std::cout << "\nIncidents: "
-              << incidents.size()
-              << '\n';
-
-    for (const auto& incident : incidents)
-    {
-        std::cout << incident.id()
-                  << " | type="
-                  << static_cast<int>(incident.type())
-                  << " | status="
-                  << static_cast<int>(incident.status())
-                  << " | impact="
-                  << incident.financialImpact()
-                  << " | findings=";
-
-        for (std::size_t index = 0;
-             index < incident.findingIds().size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << incident.findingIds()[index];
-        }
-
-        std::cout << " | entities=";
-
-        for (std::size_t index = 0;
-             index < incident.entityIds().size();
-             ++index)
-        {
-            if (index > 0)
-                std::cout << ", ";
-
-            std::cout << incident.entityIds()[index];
-        }
-
-        std::cout << '\n';
-    }
-
-    std::vector<fincon::Investigation> investigations;
-
-    investigations.reserve(
-        incidents.size()
-    );
-
-    for (const auto& incident : incidents)
-    {
-        investigations.push_back(
-            investigationService.investigate(
-                incident
-            )
-        );
-    }
-
-    std::cout << "\nInvestigations: "
-              << investigations.size()
-              << '\n';
-
-    for (const auto& investigation : investigations)
-    {
-        std::cout << investigation.id()
-                  << " | incident="
-                  << investigation.incidentId()
-                  << " | status="
-                  << static_cast<int>(investigation.status())
-                  << " | outcome="
-                  << static_cast<int>(investigation.outcome())
-                  << " | confidence="
-                  << static_cast<int>(investigation.confidence())
-                  << " | impact="
-                  << investigation.confirmedImpact()
-                  << " | evidence="
-                  << investigation.evidenceIds().size()
-                  << " | hypotheses="
-                  << investigation.hypothesisIds().size()
-                  << " | tools="
-                  << investigation.toolCallIds().size()
-                  << '\n';
-    }
-
-    fincon::FinanceControllerFacade facade(
-        investigationService,
-        auditRepository
-    );
-
-    fincon::FinanceControllerApi api(
-        facade
-    );
-
+    fincon::DefaultInvestigationService investigationService(planner, evidenceProvider, hypothesisEngine, impactCalculator, decisionPolicy, toolRegistry, completenessEvaluator, escalationPolicy, agentOrchestrator, auditService, recommendationPolicy);
+    fincon::ReconciliationEngine reconciliationEngine;
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementCalculationRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementRefundRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementFeeRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementBankRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementTimingRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::MissingRecordRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::DuplicateRecordRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::PaymentSettlementMatchingRule>());
+    reconciliationEngine.addRule(std::make_unique<fincon::SettlementAccountingRule>());
+    fincon::ReconciliationFindingCorrelator correlator;
+    fincon::IncidentBuilder incidentBuilder;
+    fincon::FinanceControllerState state;
+    fincon::FinanceControllerFacade facade(investigationService, auditRepository, state);
+    fincon::MessageQueue<fincon::FinancialDataBatch> batchQueue(32);
+    fincon::FinanceControllerApi api(facade, batchQueue, state);
     fincon::SimpleHttpServer server;
-
-    api.registerRoutes(
-        server
-    );
-
-    server.start(
-        8080
-    );
-
-    std::cout << "\nFinCon HTTP server running on port 8080\n";
-    std::cout << "Health: http://localhost:8080/health\n";
-
-    while (true)
+    fincon::Phase2Evaluation evaluation;
+    api.registerRoutes(server);
+    server.start(8080);
+    std::signal(SIGINT, requestShutdown);
+    std::signal(SIGTERM, requestShutdown);
+    std::cout << "FinCon HTTP server running on port 8080\nHealth: http://localhost:8080/health\n";
+    const std::size_t workers = workerCountFromEnv();
+    state.setActiveWorkers(workers);
+    std::vector<std::thread> pool;
+    pool.reserve(workers);
+    auto processBatch = [&](fincon::FinancialDataBatch batch)
     {
-        std::this_thread::sleep_for(
-            std::chrono::seconds(1)
-        );
+        std::string bid = batch.batchId;
+        state.emitEvent("batch_processing", bid);
+        repository.appendBatch(batch.data);
+        state.emitEvent("reconciliation_completed", bid);
+        const auto batchFindings = reconciliationEngine.reconcile(batch.data);
+        if (!batchFindings.empty()) state.emitEvent("exception_detected", bid + ":" + std::to_string(batchFindings.size()));
+        const auto batchCorrelations = correlator.correlate(batchFindings);
+        auto batchIncidents = incidentBuilder.build(batchCorrelations);
+        for (auto& bi : batchIncidents) bi.setId(bid + "-" + bi.id());
+        for (auto& bi : batchIncidents) state.emitEvent("incident_created", bi.id());
+        state.addIncidents(batchIncidents);
+        for (const auto& bi : batchIncidents)
+        {
+            state.emitEvent("investigation_started", bi.id());
+            for (auto &ev : {"tool_started","evidence_collected","hypothesis_generated","impact_calculated","decision_made","recommendation_created"}) state.emitEvent(ev, bi.id());
+            auto inv = facade.investigate(bi);
+            for (auto &tc : inv.toolCalls()) { state.emitEvent("tool_started", tc.toolName()); state.emitEvent("tool_completed", tc.toolName()); }
+            if (!inv.evidence().empty()) state.emitEvent("evidence_collected", bi.id());
+            if (!inv.hypotheses().empty()) state.emitEvent("hypothesis_generated", bi.id());
+            state.emitEvent("impact_calculated", bi.id() + ":" + std::to_string(inv.confirmedImpact()));
+            state.emitEvent("decision_made", bi.id() + ":" + std::to_string(static_cast<int>(inv.outcome())));
+            if (inv.recommendation()) state.emitEvent("recommendation_created", bi.id());
+            state.emitEvent("investigation_completed", bi.id());
+        }
+        state.markBatchProcessed(batch.data.payments.size());
+        state.emitEvent("processing_completed", bid);
+    };
+    std::thread initializer([&]()
+    {
+        state.setProcessingStatus("running");
+        state.emitEvent("batch_received", "INIT");
+        try
+        {
+            constexpr std::uint64_t seed = 42;
+            constexpr std::uint32_t exceptionRatePercent = 30;
+            fincon::FinancialDataGenerator generator(seed);
+            fincon::FinancialDataset dataset = generator.generate(2, 10);
+            fincon::ExceptionInjector injector(seed, fincon::ExceptionInjectionMode::Coverage);
+            const std::vector<fincon::InjectedException> exceptions = injector.inject(dataset, exceptionRatePercent);
+            repository.appendBatch(dataset);
+            state.emitEvent("reconciliation_completed", "INIT");
+            const std::vector<fincon::ReconciliationFinding> findings = reconciliationEngine.reconcile(dataset);
+            if (!findings.empty()) state.emitEvent("exception_detected", std::to_string(findings.size()));
+            const std::vector<fincon::FindingCorrelation> correlations = correlator.correlate(findings);
+            const std::vector<fincon::Incident> incidents = incidentBuilder.build(correlations);
+            for (auto &inc: incidents) state.emitEvent("incident_created", inc.id());
+            state.setIncidents(incidents);
+            state.setTotalRecords(dataset.payments.size() + dataset.refunds.size() + dataset.fees.size() + dataset.settlements.size() + dataset.bankTransactions.size() + dataset.accountingEntries.size());
+            state.setInitialProcessedRecords(dataset.payments.size());
+            std::cout << "Initial dataset: payments=" << dataset.payments.size() << " findings=" << findings.size() << " incidents=" << incidents.size() << "\n";
+            for (const auto& inc : incidents)
+            {
+                if (shutdownRequested.load()) break;
+                state.emitEvent("investigation_started", inc.id());
+                fincon::Investigation pending("INV-" + inc.id());
+                pending.setIncidentId(inc.id());
+                pending.setStatus(fincon::InvestigationStatus::Pending);
+                state.setInvestigation(std::move(pending));
+            }
+            std::vector<fincon::Investigation> completed;
+            completed.reserve(incidents.size());
+            for (const auto& inc : incidents)
+            {
+                if (shutdownRequested.load()) break;
+                auto inv = facade.investigate(inc);
+                state.emitEvent("investigation_completed", inc.id());
+                state.emitEvent("decision_made", inc.id());
+                completed.push_back(std::move(inv));
+            }
+            fincon::Phase2EvaluationScenarioSet scenarioSet;
+            state.setEvaluation(evaluation.evaluate(dataset.payments.size() + dataset.refunds.size() + dataset.fees.size() + dataset.settlements.size() + dataset.bankTransactions.size() + dataset.accountingEntries.size(), exceptions.size(), incidents, completed, scenarioSet.generate(exceptions.size())));
+            state.emitEvent("processing_completed", "INIT");
+        }
+        catch (const std::exception& ex) { state.setProcessingStatus("failed", ex.what()); }
+    });
+    for (std::size_t i = 0; i < workers; ++i)
+    {
+        pool.emplace_back([&]()
+        {
+            while (auto batch = batchQueue.pop())
+            {
+                if (shutdownRequested.load()) break;
+                try { processBatch(std::move(*batch)); } catch (...) {}
+            }
+        });
     }
+    while (!shutdownRequested.load()) std::this_thread::sleep_for(std::chrono::seconds(1));
+    batchQueue.shutdown();
+    if (initializer.joinable()) initializer.join();
+    for (auto& t : pool) if (t.joinable()) t.join();
+    server.stop();
 }

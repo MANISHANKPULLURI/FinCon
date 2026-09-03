@@ -4,10 +4,12 @@ namespace fincon
 {
     FinanceControllerFacade::FinanceControllerFacade(
         InvestigationService& investigationService,
-        InvestigationAuditRepository& auditRepository
+                InvestigationAuditRepository& auditRepository,
+                FinanceControllerState& state
     )
         : investigationService_(investigationService),
-          auditRepository_(auditRepository)
+                    auditRepository_(auditRepository),
+                    state_(state)
     {
     }
 
@@ -15,9 +17,10 @@ namespace fincon
         const Incident& incident
     ) const
     {
-        return investigationService_.investigate(
-            incident
-        );
+        Investigation investigation =
+            investigationService_.investigate(incident);
+        state_.setInvestigation(investigation);
+        return investigation;
     }
 
     std::vector<InvestigationAuditEntry>
@@ -28,5 +31,11 @@ namespace fincon
         return auditRepository_.getByInvestigation(
             investigationId
         );
+    }
+
+    FinanceControllerState::Snapshot
+    FinanceControllerFacade::snapshot() const
+    {
+        return state_.snapshot();
     }
 }

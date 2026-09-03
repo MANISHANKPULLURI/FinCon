@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -62,39 +63,69 @@ namespace fincon
             }
         }
 
+        std::string toLower(std::string s)
+        {
+            for (char &c : s) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+            return s;
+        }
+
+        std::string headerValue(
+            const std::string& header,
+            const std::string& name)
+        {
+            std::istringstream stream(header);
+            std::string line;
+            const std::string lowerName = toLower(name) + ":";
+
+            while (std::getline(stream, line))
+            {
+                std::string lowerLine = toLower(line);
+                if (lowerLine.starts_with(lowerName))
+                    return trim(line.substr(lowerName.size()));
+            }
+
+            return {};
+        }
+
         bool receiveRequest(
             int clientSocket,
             std::string& requestData
         )
         {
             char buffer[4096];
+            std::size_t headerEnd = std::string::npos;
+            std::size_t contentLength = 0;
+            bool hasLength = false;
 
-            while (
-                requestData.find("\r\n\r\n") ==
-                std::string::npos
-            )
+            while (true)
             {
-                const ssize_t received =
-                    recv(
-                        clientSocket,
-                        buffer,
-                        sizeof(buffer),
-                        0
-                    );
-
-                if (received <= 0)
+                headerEnd = requestData.find("\r\n\r\n");
+                if (headerEnd != std::string::npos)
+                {
+                    std::string header = requestData.substr(0, headerEnd);
+                    std::string cl = headerValue(header, "Content-Length");
+                    if (!cl.empty())
+                    {
+                        try { contentLength = std::stoull(cl); hasLength = true; } catch (...) { return false; }
+                        std::size_t bodyStart = headerEnd + 4;
+                        std::size_t haveBody = requestData.size() > bodyStart ? requestData.size() - bodyStart : 0;
+                        if (haveBody >= contentLength)
+                            return true;
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
+                if (requestData.size() > 1024 * 1024 + 4096)
                     return false;
-
-                requestData.append(
-                    buffer,
-                    static_cast<std::size_t>(received)
-                );
-
-                if (requestData.size() > 1024 * 1024)
+                ssize_t received = recv(clientSocket, buffer, sizeof(buffer), 0);
+                if (received <= 0)
+                    return headerEnd != std::string::npos;
+                requestData.append(buffer, static_cast<std::size_t>(received));
+                if (requestData.size() > 1024 * 1024 + 4096)
                     return false;
             }
-
-            return true;
         }
 
         HttpRequest parseRequest(
@@ -111,9 +142,7 @@ namespace fincon
                 );
 
             const std::string body =
-                requestData.substr(
-                    headerEnd + 4
-                );
+                requestData.substr(headerEnd + 4);
 
             std::istringstream stream(header);
 
@@ -136,7 +165,20 @@ namespace fincon
                 request.method >>
                 request.path;
 
-            request.body = body;
+            const std::string contentLength =
+                headerValue(header, "Content-Length");
+            if (!contentLength.empty())
+            {
+                const std::size_t length =
+                    std::stoull(contentLength);
+                if (length > 1024 * 1024 || body.size() < length)
+                    throw std::invalid_argument("Invalid request body length.");
+                request.body = body.substr(0, length);
+            }
+            else
+            {
+                request.body = body;
+            }
 
             return request;
         }
@@ -160,13 +202,23 @@ namespace fincon
                 << response.contentType
                 << "\r\n";
 
+            if (!response.keepAlive)
+            {
+                output
+                    << "Content-Length: "
+                    << response.body.size()
+                    << "\r\n";
+            }
+
             output
-                << "Content-Length: "
-                << response.body.size()
+                << "Access-Control-Allow-Origin: "
+                << response.accessControlAllowOrigin
                 << "\r\n";
 
             output
-                << "Connection: close\r\n";
+                << "Connection: "
+                << (response.keepAlive ? "keep-alive" : "close")
+                << "\r\n";
 
             output << "\r\n";
 
@@ -296,6 +348,11 @@ namespace fincon
 
         if (serverThread_.joinable())
             serverThread_.join();
+
+        {
+            std::lock_guard<std::mutex> lock(clientMutex_);
+            clientThreads_.clear();
+        }
     }
 
     std::string SimpleHttpServer::makeRouteKey(
@@ -321,16 +378,56 @@ namespace fincon
                     request.path
                 );
 
-            const auto iterator =
+            auto iterator =
                 routes_.find(key);
 
             if (iterator == routes_.end())
             {
-                return HttpResponse{
-                    404,
-                    "application/json",
-                    R"({"error":"Route not found"})"
-                };
+                std::size_t bestSuffixLength = 0;
+                for (auto candidate = routes_.begin();
+                     candidate != routes_.end();
+                     ++candidate)
+                {
+                    const std::string marker = "{id}";
+                    const std::size_t markerPosition =
+                        candidate->second.path.find(marker);
+                    const std::string routePrefix =
+                        candidate->second.path.substr(
+                            0,
+                            markerPosition
+                        );
+                    const std::string routeSuffix =
+                        candidate->second.path.substr(
+                            markerPosition + marker.size()
+                        );
+                    const bool hasPrefix =
+                        request.path.starts_with(routePrefix);
+                    const bool hasSuffix =
+                        routeSuffix.empty() || request.path.ends_with(routeSuffix);
+                    const std::size_t idStart = routePrefix.size();
+                    const std::size_t idEnd =
+                        routeSuffix.empty()
+                            ? request.path.size()
+                            : request.path.size() - routeSuffix.size();
+
+                    if (candidate->second.method == request.method &&
+                        markerPosition != std::string::npos &&
+                        hasPrefix && hasSuffix && idEnd > idStart &&
+                        routeSuffix.size() >= bestSuffixLength)
+                    {
+                        iterator = candidate;
+                        bestSuffixLength = routeSuffix.size();
+                    }
+                }
+
+                if (iterator == routes_.end())
+                {
+                    return HttpResponse{
+                        404,
+                        "application/json",
+                        R"({"error":"Route not found"})"
+                    };
+                }
             }
 
             handler =
@@ -341,13 +438,13 @@ namespace fincon
         {
             return handler(request);
         }
-        catch (const std::exception& exception)
+        catch (const std::exception&)
         {
             return HttpResponse{
                 500,
                 "application/json",
                 std::string(R"({"error":")") +
-                exception.what() +
+                "Internal server error." +
                 R"("})"
             };
         }
@@ -489,37 +586,31 @@ namespace fincon
                 continue;
             }
 
-            std::string requestData;
-
-            if (receiveRequest(
-                    clientSocket,
-                    requestData
-                ))
             {
-                const HttpRequest request =
-                    parseRequest(
-                        requestData
-                    );
-
-                const HttpResponse response =
-                    handleRequest(
-                        request
-                    );
-
-                sendResponse(
-                    clientSocket,
-                    response
+                std::lock_guard<std::mutex> lock(clientMutex_);
+                std::vector<std::thread> stillAlive;
+                stillAlive.reserve(clientThreads_.size());
+                for (auto &t : clientThreads_)
+                {
+                    if (t.joinable())
+                        stillAlive.push_back(std::move(t));
+                }
+                clientThreads_.swap(stillAlive);
+                if (clientThreads_.size() >= kMaxClients)
+                {
+                    HttpResponse r{503, "application/json", R"({"error":"Too many connections"})"};
+                    sendResponse(clientSocket, r);
+                    close(clientSocket);
+                    continue;
+                }
+                clientThreads_.emplace_back(
+                    &SimpleHttpServer::handleClient,
+                    this,
+                    clientSocket
                 );
+                if (clientThreads_.back().joinable())
+                    clientThreads_.back().detach();
             }
-
-            shutdown(
-                clientSocket,
-                SHUT_RDWR
-            );
-
-            close(
-                clientSocket
-            );
         }
 
         if (serverSocket_ != -1)
@@ -530,5 +621,58 @@ namespace fincon
 
             serverSocket_ = -1;
         }
+    }
+
+    void SimpleHttpServer::handleClient(int clientSocket)
+    {
+        try
+        {
+            std::string requestData;
+            if (receiveRequest(clientSocket, requestData))
+            {
+                const HttpRequest request = parseRequest(requestData);
+                HttpResponse response = handleRequest(request);
+                sendResponse(clientSocket, response);
+
+                if (response.keepAlive)
+                {
+                    while (running_)
+                    {
+                        std::this_thread::sleep_for(
+                            std::chrono::seconds(1)
+                        );
+
+                        if (!running_)
+                            break;
+
+                        response = handleRequest(request);
+                        const std::string event = response.body;
+                        const ssize_t sent = send(
+                            clientSocket,
+                            event.data(),
+                            event.size(),
+                            MSG_NOSIGNAL
+                        );
+
+                        if (sent <= 0)
+                            break;
+                    }
+                }
+            }
+        }
+        catch (...)
+        {
+            sendResponse(
+                clientSocket,
+                HttpResponse{
+                    400,
+                    "application/json",
+                    R"({"error":{"code":"BAD_REQUEST","message":"Malformed request."}})"
+                }
+            );
+        }
+
+        shutdown(clientSocket, SHUT_RDWR);
+        close(clientSocket);
     }
 }

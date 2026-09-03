@@ -48,6 +48,11 @@ namespace fincon
             return id_;
         }
 
+        void setId(std::string id)
+        {
+            id_ = std::move(id);
+        }
+
         IncidentStatus status() const
         {
             return status_;

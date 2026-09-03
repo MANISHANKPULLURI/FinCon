@@ -1,6 +1,9 @@
 #pragma once
 
 #include "domain/investigation/InvestigationRecommendation.h"
+#include "domain/investigation/InvestigationEvidence.h"
+#include "domain/investigation/InvestigationHypothesis.h"
+#include "domain/investigation/InvestigationToolCall.h"
 
 #include <cstdint>
 #include <optional>
@@ -102,6 +105,21 @@ namespace fincon
             return recommendation_ ? &(*recommendation_) : nullptr;
         }
 
+        const std::vector<InvestigationEvidence>& evidence() const
+        {
+            return evidence_;
+        }
+
+        const std::vector<InvestigationHypothesis>& hypotheses() const
+        {
+            return hypotheses_;
+        }
+
+        const std::vector<InvestigationToolCall>& toolCalls() const
+        {
+            return toolCalls_;
+        }
+
         void setIncidentId(std::string incidentId)
         {
             incidentId_ = std::move(incidentId);
@@ -154,6 +172,24 @@ namespace fincon
             recommendation_ = std::move(recommendation);
         }
 
+        void setEvidence(
+            std::vector<InvestigationEvidence> evidence)
+        {
+            evidence_ = std::move(evidence);
+        }
+
+        void setHypotheses(
+            std::vector<InvestigationHypothesis> hypotheses)
+        {
+            hypotheses_ = std::move(hypotheses);
+        }
+
+        void setToolCalls(
+            std::vector<InvestigationToolCall> toolCalls)
+        {
+            toolCalls_ = std::move(toolCalls);
+        }
+
     private:
         std::string id_;
         std::string incidentId_;
@@ -171,5 +207,8 @@ namespace fincon
         bool llmEscalated_ = false;
 
         std::optional<InvestigationRecommendation> recommendation_;
+        std::vector<InvestigationEvidence> evidence_;
+        std::vector<InvestigationHypothesis> hypotheses_;
+        std::vector<InvestigationToolCall> toolCalls_;
     };
 }

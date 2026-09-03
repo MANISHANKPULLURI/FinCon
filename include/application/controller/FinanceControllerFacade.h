@@ -2,6 +2,7 @@
 
 #include "application/investigation/InvestigationAuditRepository.h"
 #include "application/investigation/InvestigationService.h"
+#include "application/state/FinanceControllerState.h"
 #include "domain/incident/Incident.h"
 #include "domain/investigation/Investigation.h"
 
@@ -15,7 +16,8 @@ namespace fincon
     public:
         FinanceControllerFacade(
             InvestigationService& investigationService,
-            InvestigationAuditRepository& auditRepository
+            InvestigationAuditRepository& auditRepository,
+            FinanceControllerState& state
         );
 
         Investigation investigate(
@@ -26,8 +28,11 @@ namespace fincon
             const std::string& investigationId
         ) const;
 
+        FinanceControllerState::Snapshot snapshot() const;
+
     private:
         InvestigationService& investigationService_;
         InvestigationAuditRepository& auditRepository_;
+        FinanceControllerState& state_;
     };
 }

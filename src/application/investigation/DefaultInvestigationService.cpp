@@ -160,6 +160,10 @@ namespace fincon
             );
         }
 
+        investigation.setEvidence(context.evidence);
+        investigation.setHypotheses(context.hypotheses);
+        investigation.setToolCalls(context.toolCalls);
+
         investigation.setConfirmedImpact(
             decision.financialImpact()
         );
@@ -317,66 +321,80 @@ namespace fincon
                 request.addToolCall(toolCall);
             }
 
-            const InvestigationResponse response =
-                agentOrchestrator_.investigate(
-                    std::move(request)
+            try
+            {
+                const InvestigationResponse response =
+                    agentOrchestrator_.investigate(
+                        std::move(request)
+                    );
+
+                decision = response.decision();
+
+                investigation.setConfirmedImpact(
+                    decision.financialImpact()
                 );
 
-            decision = response.decision();
-
-            investigation.setConfirmedImpact(
-                decision.financialImpact()
-            );
-
-            investigation.setOutcome(
-                [&decision]()
-                {
-                    switch (decision.type())
+                investigation.setOutcome(
+                    [&decision]()
                     {
-                    case DecisionType::AutoResolve:
-                        return InvestigationOutcome::AutoResolve;
+                        switch (decision.type())
+                        {
+                        case DecisionType::AutoResolve:
+                            return InvestigationOutcome::AutoResolve;
 
-                    case DecisionType::HumanReview:
-                        return InvestigationOutcome::HumanReview;
+                        case DecisionType::HumanReview:
+                            return InvestigationOutcome::HumanReview;
 
-                    case DecisionType::RequestMoreEvidence:
-                        return InvestigationOutcome::RequestMoreEvidence;
+                        case DecisionType::RequestMoreEvidence:
+                            return InvestigationOutcome::RequestMoreEvidence;
 
-                    case DecisionType::Unresolved:
-                        return InvestigationOutcome::Unresolved;
-                    }
+                        case DecisionType::Unresolved:
+                            return InvestigationOutcome::Unresolved;
+                        }
 
-                    return InvestigationOutcome::Unknown;
-                }()
-            );
+                        return InvestigationOutcome::Unknown;
+                    }()
+                );
 
-            investigation.setConfidence(
-                [&decision]()
-                {
-                    switch (decision.confidence())
+                investigation.setConfidence(
+                    [&decision]()
                     {
-                    case DecisionConfidence::Low:
-                        return ConfidenceLevel::Low;
+                        switch (decision.confidence())
+                        {
+                        case DecisionConfidence::Low:
+                            return ConfidenceLevel::Low;
 
-                    case DecisionConfidence::Medium:
-                        return ConfidenceLevel::Medium;
+                        case DecisionConfidence::Medium:
+                            return ConfidenceLevel::Medium;
 
-                    case DecisionConfidence::High:
-                        return ConfidenceLevel::High;
-                    }
+                        case DecisionConfidence::High:
+                            return ConfidenceLevel::High;
+                        }
 
-                    return ConfidenceLevel::Unknown;
-                }()
-            );
+                        return ConfidenceLevel::Unknown;
+                    }()
+                );
 
-            auditService_.record(
-                investigation.id(),
-                incident.id(),
-                AuditEventType::DecisionMade,
-                "llm-agent",
-                decision.rationale(),
-                decision.financialImpact()
-            );
+                auditService_.record(
+                    investigation.id(),
+                    incident.id(),
+                    AuditEventType::DecisionMade,
+                    "llm-agent",
+                    decision.rationale(),
+                    decision.financialImpact()
+                );
+            }
+            catch (const std::exception& ex)
+            {
+                auditService_.record(
+                    investigation.id(),
+                    incident.id(),
+                    AuditEventType::DecisionMade,
+                    "llm-agent",
+                    std::string("LLM escalation failed, fallback to deterministic decision: ") + ex.what(),
+                    decision.financialImpact()
+                );
+            }
         }
 
         const InvestigationRecommendation recommendation =

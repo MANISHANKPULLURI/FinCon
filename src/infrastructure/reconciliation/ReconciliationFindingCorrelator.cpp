@@ -324,9 +324,10 @@ namespace fincon
 
             std::vector<std::string> findingIds;
             std::vector<std::string> entityIds;
+            std::vector<std::string> ruleIds;
 
             for (const ReconciliationFinding* finding :
-                 groupedFindings)
+                  groupedFindings)
             {
                 findingIds.push_back(
                     finding->id
@@ -337,6 +338,8 @@ namespace fincon
                     finding->entityIds.begin(),
                     finding->entityIds.end()
                 );
+
+                ruleIds.push_back(finding->ruleId);
             }
 
             std::sort(
@@ -370,6 +373,10 @@ namespace fincon
 
             correlation.entityIds =
                 std::move(entityIds);
+
+            std::sort(ruleIds.begin(), ruleIds.end());
+            ruleIds.erase(std::unique(ruleIds.begin(), ruleIds.end()), ruleIds.end());
+            correlation.ruleIds = std::move(ruleIds);
 
             correlation.financialExposure =
                 Money(

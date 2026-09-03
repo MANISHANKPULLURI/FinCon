@@ -1,0 +1,38 @@
+.flow-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 1px;
+  background: #c9d0c8;
+}
+
+.flow-metrics span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 15px 18px;
+  background: #e8ece5;
+  color: #657169;
+  font: 500 0.7rem 'DM Mono', monospace;
+  text-transform: uppercase;
+}
+
+.flow-metrics b {
+  color: #17231f;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .flow-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .flow-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
