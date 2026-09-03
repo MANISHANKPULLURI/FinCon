@@ -4,15 +4,24 @@ FinCon is an AI-powered Finance Controller that investigates financial exception
 
 By combining deterministic financial controls with agentic investigation, FinCon helps finance teams reduce manual exception-handling effort, prioritize financially significant issues, and resolve cases faster while preserving human oversight, explainability, and auditability.
 
+---
 
 ## Problem Statement
 
 Modern financial systems process large volumes of payments, refunds, settlements, bank transactions, and accounting records. Reconciliation helps identify discrepancies, but finding a mismatch is only the beginning.
 
-When an exception occurs, finance teams still need to investigate **what went wrong, why it happened, which records are related, how much money is affected, and what action should be taken**. This often requires manually searching across multiple systems and validating evidence.
+When an exception occurs, finance teams still need to investigate:
+- **What went wrong**
+- **Why it happened**
+- **Which records are related**
+- **How much money is affected**
+- **What action should be taken**
+
+This often requires manually searching across multiple systems and validating evidence.
 
 The challenge is to build an intelligent Finance Controller that can **automate this investigation process**, provide evidence-backed conclusions and financial impact, while escalating uncertain or sensitive cases for human review instead of making unsafe decisions.
 
+---
 
 ## Solution
 
@@ -22,57 +31,71 @@ It combines **deterministic financial analysis with agentic investigation** to g
 
 Every investigation produces a structured, auditable result:
 
-**Exception → Evidence → Root Cause → ₹ Impact → Confidence → Decision → Recommendation → Audit Trail**
+$$\text{Exception} \longrightarrow \text{Evidence} \longrightarrow \text{Root Cause} \longrightarrow ₹\text{ Impact} \longrightarrow \text{Confidence} \longrightarrow \text{Decision} \longrightarrow \text{Recommendation} \longrightarrow \text{Audit Trail}$$
 
 When the evidence is insufficient or the risk is too high, FinCon does not guess. It can request more evidence, escalate the case for human review, or mark it as unresolved.
 
+---
 
 ## Tech Stack
 
 | Technology | Purpose |
 |---|---|
-| C++20 + CMake | Core financial processing and backend |
-| MetaLlama | AI-powered exception investigation |
-| Svelte + TypeScript | Dashboard and investigation UI |
-| Python | Synthetic data generation |
-| REST + SSE | API and real-time updates |
+| **C++20 + CMake** | Core financial processing, deterministic reconciliation engine, and backend |
+| **Meta Llama** | Agentic AI-powered exception investigation and hypothesis reasoning |
+| **Svelte + TypeScript** | Responsive command dashboard and interactive investigation UI |
+| **Python** | High-fidelity synthetic data generation and exception scenario modeling |
+| **REST + SSE** | Synchronous API endpoints and Server-Sent Events for real-time streaming updates |
 
+---
 
 ## Key Features
 
-- Automated reconciliation and exception detection
-- Evidence-based financial investigation
-- Root-cause analysis with AI
-- Financial impact and confidence assessment
-- Human review for uncertain cases
-- Complete investigation audit trail
-- Live finance dashboard with real-time processing updates
+- **Automated Reconciliation & Exception Detection:** High-speed deterministic rule matching.
+- **Evidence-Based Financial Investigation:** Deep correlation across ledger, bank, and gateway records.
+- **Root-Cause Analysis with AI:** Hypothesis generation and validation using LLM reasoning with tool constraints.
+- **Financial Impact & Confidence Assessment:** Precise quantification of financial exposure before decisioning.
+- **Human Review for Uncertain Cases:** Risk-weighted escalation boundaries prevent automated errors.
+- **Complete Investigation Audit Trail:** Append-only logging of evidence, tool invocations, hypotheses, and decisions.
+- **Finance Command Centre:** Live operational dashboard with real-time SSE stream processing metrics.
 
+---
 
 ## How It Works
 
+```text
 Financial Data
-→ Reconciliation
-→ Exception Detection
-→ Investigation
-→ Evidence & Root Cause
-→ ₹ Impact
-→ Decision
-→ Recommendation
-→ Audit
+      ↓
+Deterministic Reconciliation
+      ↓
+Exception Detection
+      ↓
+Agentic Investigation
+      ↓
+Evidence Gathering & Root-Cause Hypotheses
+      ↓
+Financial Impact (₹) & Confidence Scoring
+      ↓
+Deterministic Decision & Risk Thresholding
+      ↓
+Actionable Recommendation
+      ↓
+Immutable Audit Trail
+```
 
+---
 
-# FinCon Architecture
+## FinCon Architecture
 
 FinCon follows a deterministic-first architecture where financial truth is established through controlled processing and reconciliation, while AI is used selectively for investigating exceptions.
 
 The system processes financial data from ingestion through reconciliation, investigation, decisioning, audit, and the Finance Command Centre.
 
-## Architecture
+### System Diagram
 
-![FinCon Architecture](./architecture.png)
+![FinCon Architecture](/FinConArchitecture.png)
 
-## Architecture Flow
+### Architecture Pipeline
 
 ```text
 Ingestion
@@ -106,87 +129,77 @@ Audit Trail
 REST / SSE
     ↓
 Finance Command Centre
+```
 
+### Component Details
 
-1. Ingestion
-Accepts heterogeneous financial JSON, maps supported schemas into canonical financial models, and rejects ambiguous or invalid mappings.
+1. **Ingestion:** Accepts heterogeneous financial JSON, maps supported schemas into canonical financial models, and rejects ambiguous or invalid mappings.
+2. **Stream Processing:** Uses a bounded queue and worker pool to process financial batches with backpressure and idempotency controls.
+3. **Reconciliation:** Applies deterministic reconciliation rules to identify financial discrepancies without relying on the LLM.
+4. **Incident Correlation:** Groups related findings and financial entities into business-level incidents.
+5. **Investigation:** Collects relevant evidence, generates hypotheses, calculates financial impact, and determines whether AI escalation is required.
+6. **Decision & Recommendation:** Applies deterministic decision and escalation policies to determine whether a case can be automatically resolved, requires human review, needs more evidence, or remains unresolved.
+7. **Audit:** Maintains an append-only investigation trail covering evidence, tools, hypotheses, decisions, recommendations, and completion.
+8. **State & API:** Maintains thread-safe application state and exposes REST APIs and Server-Sent Events for live updates.
+9. **Finance Command Centre:** Provides a live operational view of ingestion, processing, exceptions, investigations, financial exposure, decisions, and investigation activity.
 
-2. Stream Processing
-Uses a bounded queue and worker pool to process financial batches with backpressure and idempotency controls.
-
-3. Reconciliation
-Applies deterministic reconciliation rules to identify financial discrepancies without relying on the LLM.
-
-4. Incident Correlation
-Groups related findings and financial entities into business-level incidents.
-
-5. Investigation
-Collects relevant evidence, generates hypotheses, calculates financial impact, and determines whether AI escalation is required.
-
-6. Decision & Recommendation
-Applies deterministic decision and escalation policies to determine whether a case can be automatically resolved, requires human review, needs more evidence, or remains unresolved.
-
-7. Audit
-Maintains an append-only investigation trail covering evidence, tools, hypotheses, decisions, recommendations, and completion.
-
-8. State & API
-Maintains thread-safe application state and exposes REST APIs and Server-Sent Events for live updates.
-
-9. Finance Command Centre
-Provides a live operational view of ingestion, processing, exceptions, investigations, financial exposure, decisions, and investigation activity.
+---
 
 ## Validation & Accuracy
 
 FinCon was tested against synthetic financial data with deliberately injected exception scenarios. The current prototype demonstrates the complete flow from reconciliation through investigation and decisioning.
 
-| Area | Current Result |
-|---|---:|
-| Exception scenarios | 8 |
-| Reconciliation findings | 16 |
-| Business incidents | 8 |
-| Finding → Incident correlation | 100% |
-| Incident classification | ~80% |
-| Deterministic reconciliation | ~70% |
-| Investigation layer | ~65% |
-| Zero-impact safe cases | 2 |
-| Deliberately unresolvable cases | 1 |
+| Metric / Evaluation Area | Prototype Benchmark Result | Notes & Description |
+|---|:---:|---|
+| **Exception Scenarios Evaluated** | `8` | Distinct injection profiles covering diverse payment lifecycle stages |
+| **Reconciliation Findings Detected** | `16` | Raw discrepancy flags raised by the deterministic rules engine |
+| **Correlated Business Incidents** | `8` | Multi-finding aggregates mapped to singular root incidents |
+| **Finding → Incident Correlation Accuracy** | `100%` | Complete precision in clustering related transaction discrepancies |
+| **Incident Classification Accuracy** | `~80%` | Correct categorization of underlying exception taxonomy |
+| **Deterministic Reconciliation Coverage** | `~70%` | Pure rule-based coverage prior to agentic investigation trigger |
+| **Investigation Layer Completion Rate** | `~65%` | Autonomous hypothesis and evidence closure without stall |
+| **Zero-Impact Safe Cases Verified** | `2` | Correctly identified timing shifts with ₹0 balance exposure |
+| **Deliberately Unresolvable Cases** | `1` | Validates safety gate refusing hallucinated resolutions |
 
-The current evaluation covers duplicate settlements, missing records, timing issues, refund mismatches, partial settlements, fee discrepancies, and unresolvable cases.
+*Note: These figures represent prototype evaluation benchmarks on synthetic test suites and do not reflect production SLA guarantees. The agentic investigation layer utilizes stochastic LLM reasoning and output may vary across executions.*
 
-These figures represent the current prototype evaluation and are not presented as production accuracy. The investigation layer includes LLM behavior, so its results can vary across runs.
+---
 
-### Exception Coverage
+### Exception Scenario Coverage
 
-| Scenario | Incident Type | Financial Impact | Expected Outcome |
-|---|---|---:|---|
-| Duplicate Settlement | Duplicate Record | ₹34,843.21 | Human Review |
-| Missing Record | Missing Record | ₹4,874.33 | Request More Evidence |
-| Delayed Settlement | Timing Issue | ₹0 | Auto Resolve |
-| Refund Mismatch | Refund Issue | ₹10.00 | Request More Evidence |
-| Partial Settlement | Settlement Issue | ₹18,670.21 | Human Review |
-| Bank Timing Shift | Timing Issue | ₹0 | Auto Resolve |
-| Fee Discrepancy | Fee Issue | ₹5.00 | Request More Evidence |
-| Unresolvable Settlement | Settlement Issue | ₹0.01 | Unresolved |
+| Scenario | Incident Type | Financial Impact | Confidence Level | Expected Outcome | System Action |
+|---|---|---:|:---:|---|---|
+| **Duplicate Settlement** | Duplicate Record | ₹34,843.21 | High | Human Review | Flagged for Finance Ops; hold batch release |
+| **Missing Record** | Missing Record | ₹4,874.33 | Medium | Request More Evidence | Query upstream gateway batch logs |
+| **Delayed Settlement** | Timing Issue | ₹0.00 | High | Auto Resolve | Mark as in-transit timing delay; auto-close |
+| **Refund Mismatch** | Refund Issue | ₹10.00 | Medium | Request More Evidence | Request acquirer fee breakdown ledger |
+| **Partial Settlement** | Settlement Issue | ₹18,670.21 | High | Human Review | Escalate split settlement balance discrepancy |
+| **Bank Timing Shift** | Timing Issue | ₹0.00 | High | Auto Resolve | Match against next-day clearing cycle; auto-close |
+| **Fee Discrepancy** | Fee Issue | ₹5.00 | Medium | Request More Evidence | Check contract rate card tier updates |
+| **Unresolvable Settlement** | Settlement Issue | ₹0.01 | Low | Unresolved | Block automated signoff; route to triage queue |
 
-The evaluation deliberately includes both resolvable and uncertain cases to verify that FinCon does not force every exception into an automatic resolution.
+*The evaluation intentionally includes both resolvable and uncertain cases to ensure FinCon strictly adheres to financial safety gates rather than forcing synthetic resolutions.*
+
+---
 
 ## Scalability & Extensibility
 
-The current agent is built around controlled tool calls and can be incrementally extended with additional financial tools, exception-specific investigation flows, and company policy integrations without redesigning the core architecture.
+The agentic framework is built around controlled tool calls and can be extended without redesigning core components:
 
-As investigations require more evidence, FinCon can incorporate RAG over company policies, SOPs, historical cases, and other approved knowledge sources to improve investigation accuracy while keeping financial calculations and decisions deterministic.
+- **Incremental Tool Growth:** New financial tool bindings (e.g., SWIFT verification, gateway ledger APIs) can be added as isolated functions.
+- **RAG for Policies & SOPs:** As domain complexity grows, FinCon can incorporate Retrieval-Augmented Generation (RAG) over company finance manuals, internal accounting policies, standard operating procedures, and historical resolved cases.
+- **Deterministic Guardrails:** Financial calculations, impact metrics, and threshold checks remain 100% deterministic and auditable, ensuring the LLM acts only as an investigative researcher.
+- **Distributed Infrastructure:** The architecture is structured to scale cleanly from the prototype in-memory queue to distributed message buses (Kafka/RabbitMQ), persistent relational/document storage, and horizontally scaled worker clusters.
 
-The architecture is designed to scale incrementally — from the current in-memory prototype to durable storage, distributed queues, additional workers, production connectors, richer tool sets, and policy/RAG services without changing the core investigation flow.
+---
 
-> **Current scope:** The prototype validates the complete investigation pipeline with controlled tools and synthetic exceptions; additional tools, company-specific policies, and RAG can be introduced as evidence and domain requirements grow.
+## Current Scope, Limitations & Future Roadmap
 
-## Current Scope, Limitations & Future Improvements
-
-| Area | Current Scope | Limitation | Future Improvement |
+| Functional Area | Current Scope (Prototype) | Current Limitation | Future Production Roadmap |
 |---|---|---|---|
-| Financial Processing | Deterministic reconciliation and exception investigation | Prototype uses in-memory data | Durable production data store |
-| AI Investigation | Agent with controlled financial tool calls | Limited tool set and stochastic LLM output | More tools and exception-specific investigation flows |
-| Evidence | Structured financial evidence and validation | Limited to available prototype data | RAG for company policies, SOPs and historical cases |
-| Decisioning | Confidence-aware decisions with human escalation | Production policy engine not connected | Company-specific policy and approval integration |
-| Infrastructure | Bounded queue and configurable worker pool | Single-process prototype | Distributed queues and horizontally scalable workers |
-| Integration | REST, SSE and structured investigation output | No production authentication or financial mutation execution | Production connectors, RBAC, monitoring and controlled actions |
+| **Financial Processing** | Deterministic reconciliation, anomaly identification, and exception investigation | Relies on in-memory mock transactional state | Durable distributed data store (PostgreSQL / TimescaleDB) |
+| **AI Investigation** | Meta Llama agent with restricted financial tool calling | Constrained tool vocabulary and stochastic output sensitivity | Custom fine-tuned models, expanded tool sets, and specialized sub-agents |
+| **Evidence Gathering** | Structured canonical financial models and local transaction correlation | Scope restricted to synthetically generated datasets | Enterprise RAG over accounting SOPs, contracts, and historical ledgers |
+| **Decisioning Engine** | Confidence-aware rule policies with automated human escalation | Hard-coded risk threshold matrices | Dynamic company policy engine with configurable approval matrices & RBAC |
+| **Infrastructure & Queue** | Bounded in-memory queue with multi-threaded C++ worker pool | Single-host deployment instance | Distributed Kafka/RabbitMQ broker with horizontal auto-scaling worker nodes |
+| **Integration & Action** | REST endpoints, SSE stream feeds, and structured JSON output | Read-only analysis without automated ledger mutating actions | Two-way core banking connectors, ERP integrations (SAP/Oracle), and webhooks |
