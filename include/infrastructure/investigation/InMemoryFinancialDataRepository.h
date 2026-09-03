@@ -3,6 +3,7 @@
 #include "application/investigation/FinancialDataRepository.h"
 #include "infrastructure/generator/FinancialDataGenerator.h"
 
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <deque>

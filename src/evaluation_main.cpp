@@ -71,7 +71,8 @@ int main()
 
     fincon::LLMConfiguration llmConfiguration(
         env.get("MUSE_API_KEY"),
-        env.get("MUSE_MODEL")
+        env.get("MUSE_MODEL"),
+        env.get("MUSE_BASE_URL")
     );
 
     fincon::LibcurlHttpClient httpClient;
@@ -79,7 +80,8 @@ int main()
     fincon::MetaLlamaLLMProvider llmProvider(
         httpClient,
         llmConfiguration.apiKey(),
-        llmConfiguration.model()
+        llmConfiguration.model(),
+        llmConfiguration.baseUrl()
     );
 
     fincon::JsonInvestigationResponseParser responseParser;

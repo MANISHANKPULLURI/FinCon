@@ -37,6 +37,33 @@ When the evidence is insufficient or the risk is too high, FinCon does not guess
 
 ---
 
+## Run with Docker
+
+```bash
+docker compose up --build
+```
+
+* Frontend: http://localhost:3000
+* Backend: http://localhost:8080 (health `GET /health`)
+* Stop: `docker compose down`
+* Rebuild: `docker compose up --build --force-recreate`
+
+Optional synthetic producer (against Docker backend):
+```bash
+docker compose --profile producer run --rm producer
+# or host: python tools/data_producer/producer.py --server-url http://localhost:8080 --continuous --delay 2
+```
+
+Environment variables (optional LLM):
+```bash
+cp .env.example .env   # or src/.env
+# edit MUSE_API_KEY=... MUSE_MODEL=...
+docker compose up --build
+```
+`.env` is ignored and never baked into the image; `FINCON_WORKERS=2` controls worker count.
+
+---
+
 ## Tech Stack
 
 | Technology | Purpose |
@@ -203,3 +230,167 @@ The agentic framework is built around controlled tool calls and can be extended 
 | **Decisioning Engine** | Confidence-aware rule policies with automated human escalation | Hard-coded risk threshold matrices | Dynamic company policy engine with configurable approval matrices & RBAC |
 | **Infrastructure & Queue** | Bounded in-memory queue with multi-threaded C++ worker pool | Single-host deployment instance | Distributed Kafka/RabbitMQ broker with horizontal auto-scaling worker nodes |
 | **Integration & Action** | REST endpoints, SSE stream feeds, and structured JSON output | Read-only analysis without automated ledger mutating actions | Two-way core banking connectors, ERP integrations (SAP/Oracle), and webhooks |
+
+# Run FinCon
+
+## Docker
+
+Build and start the application:
+
+```bash
+docker compose up --build -d
+```
+
+Application ports:
+
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8080
+
+Open the dashboard:
+
+```text
+http://localhost:3000
+```
+
+Check the backend:
+
+```bash
+curl http://localhost:8080/health
+```
+
+Stop the application:
+
+```bash
+docker compose down
+```
+
+## Run Normal Batch Data
+
+Generate 5 batches:
+
+```bash
+docker compose --profile producer run --rm producer
+```
+
+The producer sends batches to:
+
+```text
+http://backend:8080
+```
+
+Typical output:
+
+```text
+202 {"accepted":true,"batchId":"BATCH-1","messageId":"MSG-BATCH-1","schemaStatus":"MAPPED","status":"QUEUED"}
+202 {"accepted":true,"batchId":"BATCH-2","messageId":"MSG-BATCH-2","schemaStatus":"MAPPED","status":"QUEUED"}
+202 {"accepted":true,"batchId":"BATCH-3","messageId":"MSG-BATCH-3","schemaStatus":"MAPPED","status":"QUEUED"}
+```
+
+## Run Live Stream
+
+Start continuous data generation:
+
+```bash
+docker compose --profile producer run --rm producer python producer.py --continuous --delay 2 --server-url http://backend:8080
+```
+
+Live batches continuously enter the processing pipeline.
+
+Typical output:
+
+```text
+202 {"accepted":true,"batchId":"BATCH-1","messageId":"MSG-BATCH-1","schemaStatus":"MAPPED","status":"QUEUED"}
+202 {"accepted":true,"batchId":"BATCH-2","messageId":"MSG-BATCH-2","schemaStatus":"MAPPED","status":"QUEUED"}
+202 {"accepted":true,"batchId":"BATCH-3","messageId":"MSG-BATCH-3","schemaStatus":"MAPPED","status":"QUEUED"}
+...
+```
+
+Stop the live producer:
+
+```text
+Ctrl+C
+```
+
+## Watch Backend Live Logs
+
+```bash
+docker compose logs -f backend
+```
+
+## Watch SSE Events
+
+```bash
+curl -N http://localhost:8080/api/events
+```
+
+Live events include:
+
+```text
+batch_received
+batch_queued
+processing_started
+reconciliation_completed
+incident_created
+investigation_started
+tool_executed
+evidence_collected
+investigation_completed
+processing_completed
+```
+
+## Main Ports
+
+| Service | Port |
+|---|---:|
+| Frontend | `3000` |
+| Backend API | `8080` |
+
+## Quick Demo
+
+Start FinCon:
+
+```bash
+docker compose up --build -d
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Then start the live producer:
+
+```bash
+docker compose --profile producer run --rm producer python producer.py --continuous --delay 2 --server-url http://backend:8080
+```
+
+In another terminal:
+
+```bash
+docker compose logs -f backend
+```
+
+Or watch the SSE stream directly:
+
+```bash
+curl -N http://localhost:8080/api/events
+```
+
+Stop everything:
+
+```bash
+docker compose down
+```
+
+## Dashboard
+
+The dashboard provides a live view of the complete FinCon financial investigation pipeline, including ingestion, processing, reconciliation, exceptions, investigations, financial impact, confidence, decisions, recommendations, audit activity, and live streaming transaction data.
+
+![FinCon Dashboard](./Dashboard.png)
+
+## Exception Investigation
+
+The exception view provides the exception list and detailed investigation information, including the identified issue, financial impact, evidence, investigation status, confidence, decision, recommendation, and related financial records.
+
+![Exception Investigation](./Exception.png)

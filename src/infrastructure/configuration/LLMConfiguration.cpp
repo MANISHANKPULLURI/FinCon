@@ -7,15 +7,18 @@ namespace fincon
 {
     LLMConfiguration::LLMConfiguration(
         std::string apiKey,
-        std::string model)
+        std::string model,
+        std::string baseUrl)
         : apiKey_(std::move(apiKey)),
-          model_(std::move(model))
+          model_(std::move(model)),
+          baseUrl_(std::move(baseUrl))
     {
-        if (apiKey_.empty())
-            throw std::invalid_argument("LLM API key is empty");
-
         if (model_.empty())
-            throw std::invalid_argument("LLM model is empty");
+            model_ = "muse-spark-1.2-contributor";
+        if (baseUrl_.empty())
+            baseUrl_ = "https://api.muse.ai/v1";
+        while (baseUrl_.size() > 1 && baseUrl_.back() == '/')
+            baseUrl_.pop_back();
     }
 
     const std::string& LLMConfiguration::apiKey() const
@@ -26,5 +29,10 @@ namespace fincon
     const std::string& LLMConfiguration::model() const
     {
         return model_;
+    }
+
+    const std::string& LLMConfiguration::baseUrl() const
+    {
+        return baseUrl_;
     }
 }

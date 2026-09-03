@@ -27,7 +27,7 @@ namespace fincon
         std::ifstream file(std::move(filePath));
 
         if (!file.is_open())
-            throw std::runtime_error("Failed to open .env file");
+            return;
 
         std::string line;
 
@@ -66,9 +66,7 @@ namespace fincon
         const auto iterator = values_.find(key);
 
         if (iterator == values_.end())
-            throw std::runtime_error(
-                "Missing environment configuration: " + key
-            );
+            return {};
 
         return iterator->second;
     }

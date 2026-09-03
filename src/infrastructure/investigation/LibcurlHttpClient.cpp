@@ -40,10 +40,29 @@ namespace fincon
             "Content-Type: application/json"
         );
 
-        headers = curl_slist_append(
-            headers,
-            ("Authorization: " + authorization).c_str()
-        );
+        if (url.find("anthropic.com") != std::string::npos)
+        {
+            std::string key = authorization;
+            if (key.rfind("Bearer ", 0) == 0) key = key.substr(7);
+            headers = curl_slist_append(
+                headers,
+                ("x-api-key: " + key).c_str()
+            );
+            headers = curl_slist_append(
+                headers,
+                "anthropic-version: 2023-06-01"
+            );
+        }
+        else
+        {
+            std::string auth = authorization;
+            if (auth.rfind("Bearer ", 0) != 0 && auth.rfind("x-api-key", 0) != 0)
+                auth = "Bearer " + auth;
+            headers = curl_slist_append(
+                headers,
+                ("Authorization: " + auth).c_str()
+            );
+        }
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -52,8 +71,8 @@ namespace fincon
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 3L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 

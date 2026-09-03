@@ -12,44 +12,68 @@ namespace fincon
     MetaLlamaLLMProvider::MetaLlamaLLMProvider(
         const HttpClient& httpClient,
         std::string apiKey,
-        std::string model)
+        std::string model,
+        std::string baseUrl)
         : httpClient_(httpClient),
           apiKey_(std::move(apiKey)),
-          model_(std::move(model))
+          model_(std::move(model)),
+          baseUrl_(std::move(baseUrl))
     {
-        if (apiKey_.empty())
-            throw std::invalid_argument("Meta Model API key is empty");
-
         if (model_.empty())
-            throw std::invalid_argument("Meta Model API model is empty");
+            model_ = "muse-spark-1.2-contributor";
+        if (baseUrl_.empty())
+            baseUrl_ = "https://api.muse.ai/v1";
+        while (baseUrl_.size() > 1 && baseUrl_.back() == '/')
+            baseUrl_.pop_back();
     }
 
     std::string MetaLlamaLLMProvider::generate(
         const std::string& request) const
     {
+        if (apiKey_.empty())
+            throw std::runtime_error("LLM API key not configured, skipping LLM escalation");
+
         if (request.empty())
             throw std::invalid_argument("LLM request is empty");
 
-        const nlohmann::json body = {
-            {"model", model_},
-            {"messages", {
-                {
-                    {"role", "user"},
-                    {"content", request}
-                }
-            }}
-        };
+        std::string endpoint;
+        nlohmann::json body;
+        if (baseUrl_.find("anthropic.com") != std::string::npos)
+        {
+            if (baseUrl_.find("/v1") != std::string::npos)
+                endpoint = baseUrl_ + "/messages";
+            else
+                endpoint = baseUrl_ + "/v1/messages";
+            body = {
+                {"model", model_},
+                {"max_tokens", 2048},
+                {"messages", {{{"role", "user"}, {"content", request}}}}
+            };
+        }
+        else
+        {
+            if (baseUrl_.find("/chat/completions") != std::string::npos)
+                endpoint = baseUrl_;
+            else if (baseUrl_.find("/v1") != std::string::npos)
+                endpoint = baseUrl_ + "/chat/completions";
+            else
+                endpoint = baseUrl_ + "/v1/chat/completions";
+            body = {
+                {"model", model_},
+                {"messages", {{{"role", "user"}, {"content", request}}}}
+            };
+        }
 
         const std::string response =
             httpClient_.post(
-                "https://api.meta.ai/v1/chat/completions",
+                endpoint,
                 body.dump(),
-                "Bearer " + apiKey_
+                apiKey_
             );
 
         if (response.empty())
             throw std::runtime_error(
-                "Meta Model API returned an empty response"
+                "LLM API returned an empty response"
             );
 
         const nlohmann::json jsonResponse =
@@ -57,37 +81,45 @@ namespace fincon
 
         if (!jsonResponse.is_object())
             throw std::runtime_error(
-                "Meta Model API response must be a JSON object"
+                "LLM API response must be a JSON object"
             );
 
-        if (!jsonResponse.contains("choices") ||
-            !jsonResponse["choices"].is_array() ||
-            jsonResponse["choices"].empty())
+        std::string content;
+        if (jsonResponse.contains("content") && jsonResponse["content"].is_array() && !jsonResponse["content"].empty())
         {
-            throw std::runtime_error(
-                "Meta Model API response contains no choices"
-            );
+            const auto& c0 = jsonResponse["content"][0];
+            if (c0.is_object() && c0.contains("text") && c0["text"].is_string())
+                content = c0["text"].get<std::string>();
+            else if (c0.is_string())
+                content = c0.get<std::string>();
         }
-
-        const auto& choice = jsonResponse["choices"][0];
-
-        if (!choice.is_object() ||
-            !choice.contains("message") ||
-            !choice["message"].is_object() ||
-            !choice["message"].contains("content") ||
-            !choice["message"]["content"].is_string())
+        if (content.empty())
         {
-            throw std::runtime_error(
-                "Meta Model API response contains no assistant content"
-            );
+            if (!jsonResponse.contains("choices") ||
+                !jsonResponse["choices"].is_array() ||
+                jsonResponse["choices"].empty())
+            {
+                throw std::runtime_error(
+                    "LLM API response contains no choices/content"
+                );
+            }
+            const auto& choice = jsonResponse["choices"][0];
+            if (!choice.is_object() ||
+                !choice.contains("message") ||
+                !choice["message"].is_object() ||
+                !choice["message"].contains("content") ||
+                !choice["message"]["content"].is_string())
+            {
+                throw std::runtime_error(
+                    "LLM API response contains no assistant content"
+                );
+            }
+            content = choice["message"]["content"].get<std::string>();
         }
-
-        const std::string content =
-            choice["message"]["content"].get<std::string>();
 
         if (content.empty())
             throw std::runtime_error(
-                "Meta Model API returned empty assistant content"
+                "LLM API returned empty assistant content"
             );
 
         std::cerr << "\n--- MUSE RAW CONTENT ---\n"

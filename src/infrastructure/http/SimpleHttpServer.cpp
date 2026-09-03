@@ -95,7 +95,6 @@ namespace fincon
             char buffer[4096];
             std::size_t headerEnd = std::string::npos;
             std::size_t contentLength = 0;
-            bool hasLength = false;
 
             while (true)
             {
@@ -106,7 +105,7 @@ namespace fincon
                     std::string cl = headerValue(header, "Content-Length");
                     if (!cl.empty())
                     {
-                        try { contentLength = std::stoull(cl); hasLength = true; } catch (...) { return false; }
+                        try { contentLength = std::stoull(cl); } catch (...) { return false; }
                         std::size_t bodyStart = headerEnd + 4;
                         std::size_t haveBody = requestData.size() > bodyStart ? requestData.size() - bodyStart : 0;
                         if (haveBody >= contentLength)
@@ -504,7 +503,7 @@ namespace fincon
             AF_INET;
 
         address.sin_addr.s_addr =
-            htonl(INADDR_LOOPBACK);
+            htonl(INADDR_ANY);
 
         address.sin_port =
             htons(
@@ -553,7 +552,7 @@ namespace fincon
         }
 
         std::cout
-            << "HTTP server listening on 127.0.0.1:"
+            << "HTTP server listening on 0.0.0.0:"
             << port
             << '\n';
 

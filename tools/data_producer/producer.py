@@ -25,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Send synthetic financial batches to FinCon")
     parser.add_argument("--batches", type=int, default=5)
     parser.add_argument("--records-per-batch", type=int, default=10)
-    parser.add_argument("--exception-rate", type=float, default=0.1)
+    parser.add_argument("--exception-rate", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--delay", type=float, default=1.0)
     parser.add_argument("--continuous", action="store_true", help="continue generating batches until interrupted")

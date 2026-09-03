@@ -73,9 +73,15 @@ namespace
 int main()
 {
     fincon::DotEnvLoader env("src/.env");
-    fincon::LLMConfiguration llmConfiguration(env.get("MUSE_API_KEY"), env.get("MUSE_MODEL"));
+    std::string apiKey = env.get("MUSE_API_KEY");
+    if (apiKey.empty()) { const char* v = std::getenv("MUSE_API_KEY"); if (v) apiKey = v; }
+    std::string model = env.get("MUSE_MODEL");
+    if (model.empty()) { const char* v = std::getenv("MUSE_MODEL"); if (v) model = v; }
+    std::string baseUrl = env.get("MUSE_BASE_URL");
+    if (baseUrl.empty()) { const char* v = std::getenv("MUSE_BASE_URL"); if (v) baseUrl = v; }
+    fincon::LLMConfiguration llmConfiguration(apiKey, model, baseUrl);
     fincon::LibcurlHttpClient httpClient;
-    fincon::MetaLlamaLLMProvider llmProvider(httpClient, llmConfiguration.apiKey(), llmConfiguration.model());
+    fincon::MetaLlamaLLMProvider llmProvider(httpClient, llmConfiguration.apiKey(), llmConfiguration.model(), llmConfiguration.baseUrl());
     fincon::JsonInvestigationResponseParser responseParser;
     fincon::MetaLlamaInvestigationAgent investigationAgent(llmProvider, responseParser);
     fincon::InMemoryFinancialDataRepository repository({}, {}, {}, {}, {}, {});

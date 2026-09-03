@@ -1,0 +1,63 @@
+services:
+  mock-llm:
+    image: python:3.11-slim
+    volumes:
+      - ./tools/mock_llm.py:/app/mock_llm.py:ro
+    working_dir: /app
+    command: ["python", "mock_llm.py"]
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',8000),timeout=2).close()"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./src/.env
+    environment:
+      - MUSE_MODEL=${MUSE_MODEL:-muse-spark-1.2-contributor}
+      - MUSE_BASE_URL=http://mock-llm:8000/v1
+      - FINCON_WORKERS=${FINCON_WORKERS:-2}
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  producer:
+    image: python:3.11-slim
+    volumes:
+      - ./tools:/app/tools
+    working_dir: /app/tools/data_producer
+    command: ["python", "producer.py", "--batches", "5", "--records-per-batch", "10", "--exception-rate", "0.05", "--delay", "1", "--server-url", "http://backend:8080"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: "no"
+    profiles: ["producer"]

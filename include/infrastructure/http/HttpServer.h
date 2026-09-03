@@ -17,7 +17,7 @@ namespace fincon
         int statusCode = 200;
         std::string contentType = "application/json";
         std::string body;
-        std::string accessControlAllowOrigin = "http://127.0.0.1:5173";
+        std::string accessControlAllowOrigin = "*";
         bool keepAlive = false;
     };
 

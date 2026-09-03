@@ -13,7 +13,8 @@ namespace fincon
         MetaLlamaLLMProvider(
             const HttpClient& httpClient,
             std::string apiKey,
-            std::string model
+            std::string model,
+            std::string baseUrl = "https://api.muse.ai/v1"
         );
 
         std::string generate(
@@ -24,5 +25,6 @@ namespace fincon
         const HttpClient& httpClient_;
         std::string apiKey_;
         std::string model_;
+        std::string baseUrl_;
     };
 }
